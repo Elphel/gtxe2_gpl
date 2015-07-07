@@ -1,3 +1,23 @@
+/*******************************************************************************
+ * Module: gtxe2_chnl_rx_align
+ * Date: 2015-07-06  
+ * Author: Alexey     
+ * Description: reciever's comma-aligner implementation
+ *
+ * Copyright (c) 2015 Elphel, Inc.
+ * gtxe2_chnl_rx_align.v is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * gtxe2_chnl_rx_align.v file is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/> .
+ *******************************************************************************/
 module gtxe2_chnl_rx_align #(
     parameter width = 20,
     parameter   [9:0]   ALIGN_MCOMMA_VALUE  = 10'b1010000011,
@@ -30,6 +50,7 @@ localparam  window_size = width;//comma_width + width;
 reg     [width - 1:0]       indata_r;
 wire    [width*2 - 1:0]     data;
 
+// looking for matches in all related bit history - in 'data'
 assign  data    = {indata, indata_r};//{indata_r, indata};
 always @ (posedge clk)
     indata_r <= indata;
@@ -53,7 +74,7 @@ end
 endgenerate
 
 // so, comma_match indicates bits, from whose comma/doublecomma (or commas) occurs in the window buffer
-// all we need from now is to get one of these bits = [x] and say [x+width-1:x] is an aligned data
+// all we need from now is to get one of these bits, [x], and say [x+width-1:x] is an aligned data
 
 // doing it in a hard way
 generate
@@ -63,6 +84,7 @@ begin: filter_comma_pos
 end
 endgenerate
 assign  comma_pos[0] = comma_match[0];
+// so, comma_pos's '1' indicates the first comma occurence. there is only one '1' in the vector
 
 function integer clogb2;
     input [31:0] value;
@@ -83,6 +105,7 @@ endfunction
 
 localparam pwidth = clogb2(width * 2 -1);
 
+// decoding (finding an index, representing '1' in comma_pos)
 wire    [pwidth - 1:0]      pointer;
 reg     [pwidth - 1:0]      pointer_latched;
 wire                        pointer_set;

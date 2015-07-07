@@ -1,3 +1,26 @@
+/*******************************************************************************
+ * Module: gtxe2_chnl_rx
+ * Date: 2015-07-06  
+ * Author: Alexey     
+ * Description: reciever top-level. Also includes polarity-inversion logic
+ *
+ * Copyright (c) 2015 Elphel, Inc.
+ * gtxe2_chnl_rx.v is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * gtxe2_chnl_rx.v file is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/> .
+ *******************************************************************************/
+ /**
+  * For now contains only deserializer, oob, 10x8 decoder, aligner and polarity invertor blocks
+  **/
 `include "gtxe2_chnl_rx_des.v"
 `include "gtxe2_chnl_rx_oob.v"
 `include "gtxe2_chnl_rx_10x8dec.v"
@@ -144,6 +167,7 @@ aligner(
     .RXMCOMMAALIGNEN    (RXMCOMMAALIGNEN)
 );
 
+// 10x8 decoder
 gtxe2_chnl_rx_10x8dec #(
     .iwidth             (internal_data_width),
     .owidth             (RX_DATA_WIDTH),

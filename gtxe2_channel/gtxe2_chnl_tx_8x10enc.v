@@ -1,3 +1,24 @@
+/*******************************************************************************
+ * Module: gtxe2_chnl_tx_8x10enc
+ * Date: 2015-07-06  
+ * Author: Alexey     
+ * Description: 8x10 encoder
+ *
+ * Copyright (c) 2015 Elphel, Inc.
+ * gtxe2_chnl_tx_8x10enc.v is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * gtxe2_chnl_tx_8x10enc.v file is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/> .
+ *******************************************************************************/
+// for some reason overall trasmitted disparity is tracked at the top level
 module gtxe2_chnl_tx_8x10enc #(
     parameter iwidth = 16,
     parameter owidth = 20
@@ -26,6 +47,9 @@ wire    [owidth - 1:0]      oword   [word_count - 1:0];
 wire    [iwidth - 1:0]      iword   [word_count - 1:0];
 wire    [word_count - 1:0]  is_control;
 
+// typical approach: 8x10 = 5x6 + 3x4
+// word disparity[i] = calculated disparity for the i-th 8-bit word
+// interm_disparity[i] - disparity after 5x6 encoding for the i-th word 
 genvar ii;
 generate
 for (ii = 0; ii < 2; ii = ii + 1)

@@ -1,6 +1,29 @@
+/*******************************************************************************
+ * Module: gtxe2_chnl_rx_oob
+ * Date: 2015-07-06  
+ * Author: Alexey     
+ * Description: oob detector
+ *
+ * Copyright (c) 2015 Elphel, Inc.
+ * gtxe2_chnl_rx_oob.v is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * gtxe2_chnl_rx_oob.v file is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/> .
+ *******************************************************************************/
+// doesnt support global parameters for now. instead uses localparams
+// in case global parameters are needed, have to translate them in terms of localparams
 module gtxe2_chnl_rx_oob #(
     parameter width = 20,
 
+// parameters are not used for now
     parameter   [2:0]   SATA_BURST_VAL  = 3'b100,
     parameter   [2:0]   SATA_EIDLE_VAL  = 3'b100,
     parameter           SATA_MIN_INIT   = 12,
@@ -23,7 +46,6 @@ module gtxe2_chnl_rx_oob #(
     output  wire            RXCOMWAKEDET
 );
 
-// parameters are not used for now
 
 localparam burst_min_len = 150;
 localparam burst_max_len = 340;
