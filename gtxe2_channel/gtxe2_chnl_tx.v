@@ -98,8 +98,8 @@ wire    line_idle_pcs; // line_idle in pcs clock domain
 wire    [internal_data_width - 1:0] ser_input;
 wire    oob_active;
 
-assign  TXP = ~line_idle & serial_data;
-assign  TXN = ~line_idle & ~serial_data;
+assign  TXP = ~line_idle ? serial_data : 1'bx;
+assign  TXN = ~line_idle ? ~serial_data : 1'bx;
 
 
 assign  line_idle_pcs = TXELECIDLE & ~oob_active | reset;

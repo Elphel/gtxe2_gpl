@@ -57,7 +57,7 @@ localparam wake_bursts_cnt = 5;
 localparam init_bursts_cnt = 5;
 
 wire    idle;
-assign  idle = RXN == RXP;
+assign  idle = (RXN == RXP) | (RXP === 1'bx);
 
 wire    state_notrans;
 wire    state_error; //nostrans substate
