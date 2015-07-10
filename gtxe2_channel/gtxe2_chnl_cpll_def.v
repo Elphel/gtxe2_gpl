@@ -1,0 +1,1 @@
+`define GTXE2_CHNL_CPLL_LOCK_TIME 60
