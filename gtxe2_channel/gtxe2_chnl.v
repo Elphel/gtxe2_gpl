@@ -18,9 +18,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-`include "gtxe2_chnl_clocking.v"
-`include "gtxe2_chnl_tx.v"
-`include "gtxe2_chnl_rx.v"
+//`include "gtxe2_chnl_clocking.v"
+//`include "gtxe2_chnl_tx.v"
+//`include "gtxe2_chnl_rx.v"
 module gtxe2_chnl(
     input   wire            reset,
 /*
