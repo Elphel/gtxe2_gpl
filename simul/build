@@ -1,0 +1,8 @@
+#!/bin/bash
+LOGFILE_PATH="bld.log"
+rm a.out
+if [ "$GTX_PATH" == '' ]
+then
+    GTX_PATH=".."
+fi
+iverilog $GTX_PATH/tb/tb.v -I$GTX_PATH/ -I$GTX_PATH/gtxe2_channel/ -I$GTX_PATH/gtxe2_common/ -I$GTX_PATH/tb/ -stb $1 2>&1| tee $LOGFILE_PATH

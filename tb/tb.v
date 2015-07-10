@@ -19,8 +19,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
 `timescale 1ps/1ps
-`include "GTXE2_CHANNEL_GPL.v"
-`include "test.v"
+//`include "GTXE2_CHANNEL.v"
+//`include "test.v"
 module tb();
 wire            reset;
 wire            TXP;

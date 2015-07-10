@@ -26,7 +26,7 @@
  * Due to lack of functionality of gtxe2_gpl project as compared to the xilinx's primitive, 
  * not all of the inputs are used and not all of the outputs are driven.
  **/
-`include "gtxe2_chnl.v"
+//`include "gtxe2_chnl.v"
 module GTXE2_CHANNEL(
 // clocking ports, UG476 p.37
     input   [2:0]       CPLLREFCLKSEL,
@@ -148,11 +148,12 @@ module GTXE2_CHANNEL(
     output              TXOUTCLKPCS,
     output              TXRATEDONE,
 // TX Phase Interpolator PPM Controller Ports, ug476 p.154
-    input               TXPIPPMEN,
+// GTH only
+/*    input               TXPIPPMEN,
     input               TXPIPPMOVRDEN,
     input               TXPIPPMSEL,
     input               TXPIPPMPD,
-    input   [4:0]       TXPIPPMSTEPSIZE,
+    input   [4:0]       TXPIPPMSTEPSIZE,*/
 // TX Configurable Driver Ports, ug476 p.156
     input   [2:0]       TXBUFDIFFCTRL,
     input               TXDEEMPH,
@@ -374,11 +375,12 @@ parameter   RXPRBS_ERR_LOOPBACK          = 1'b0;
 // TX Fabric Clock Output Control Attributes, ug476 p. 153
 parameter   TXBUF_RESET_ON_RATE_CHANGE   = "TRUE";
 // TX Phase Interpolator PPM Controller Attributes, ug476 p.155
-parameter   TXPI_SYNCFREQ_PPM            = 3'b001;
+// GTH only
+/*parameter   TXPI_SYNCFREQ_PPM            = 3'b001;
 parameter   TXPI_PPM_CFG                 = 8'd0;
 parameter   TXPI_INVSTROBE_SEL           = 1'b0;
 parameter   TXPI_GREY_SEL                = 1'b0;
-parameter   TXPI_PPMCLK_SEL              = "12345";
+parameter   TXPI_PPMCLK_SEL              = "12345";*/
 // TX Configurable Driver Attributes, ug476 p.162
 parameter   TX_DEEMPH0                   = 5'b10100;
 parameter   TX_DEEMPH1                   = 5'b01101;

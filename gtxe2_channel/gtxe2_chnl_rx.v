@@ -21,10 +21,10 @@
  /**
   * For now contains only deserializer, oob, 10x8 decoder, aligner and polarity invertor blocks
   **/
-`include "gtxe2_chnl_rx_des.v"
-`include "gtxe2_chnl_rx_oob.v"
-`include "gtxe2_chnl_rx_10x8dec.v"
-`include "gtxe2_chnl_rx_align.v"
+//`include "gtxe2_chnl_rx_des.v"
+//`include "gtxe2_chnl_rx_oob.v"
+//`include "gtxe2_chnl_rx_10x8dec.v"
+//`include "gtxe2_chnl_rx_align.v"
 module gtxe2_chnl_rx(
     input   wire            reset,
     input   wire            RXP,

@@ -19,10 +19,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-`include "gtxe2_chnl_cpll_inmux.v"
-`include "gtxe2_chnl_outclk_mux.v"
-`include "gtxe2_chnl_cpll.v"
-`include "clock_divider.v"
+//`include "gtxe2_chnl_cpll_inmux.v"
+//`include "gtxe2_chnl_outclk_mux.v"
+//`include "gtxe2_chnl_cpll.v"
+//`include "clock_divider.v"
 module gtxe2_chnl_clocking(
 // top-level interfaces
     input   wire    [2:0]   CPLLREFCLKSEL,

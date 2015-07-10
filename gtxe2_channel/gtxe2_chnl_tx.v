@@ -19,9 +19,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-`include "gtxe2_chnl_tx_ser.v"
-`include "gtxe2_chnl_tx_8x10enc.v"
-`include "gtxe2_chnl_tx_oob.v"
+//`include "gtxe2_chnl_tx_ser.v"
+//`include "gtxe2_chnl_tx_8x10enc.v"
+//`include "gtxe2_chnl_tx_oob.v"
 module gtxe2_chnl_tx(
     input   wire            reset,
     output  wire            TXP,
