@@ -21,10 +21,11 @@
  /**
   * For now contains only deserializer, oob, 10x8 decoder, aligner and polarity invertor blocks
   **/
-//`include "gtxe2_chnl_rx_des.v"
-//`include "gtxe2_chnl_rx_oob.v"
-//`include "gtxe2_chnl_rx_10x8dec.v"
-//`include "gtxe2_chnl_rx_align.v"
+`include "gtxe2_chnl_rx_des.v"
+`include "gtxe2_chnl_rx_oob.v"
+`include "gtxe2_chnl_rx_10x8dec.v"
+`include "gtxe2_chnl_rx_align.v"
+`include "gtxe2_chnl_rx_dataiface.v"
 module gtxe2_chnl_rx(
     input   wire            reset,
     input   wire            RXP,
@@ -111,6 +112,7 @@ gtxe2_chnl_rx_oob #(
 rx_oob(
     .reset          (reset),
     .clk            (serial_clk),
+    .usrclk2        (RXUSRCLK2),
     .RXN            (RXN),
     .RXP            (RXP),
 
@@ -158,6 +160,8 @@ aligner(
     .indata             (parallel_data),
     .outdata            (aligned_data),
 
+    .rxelecidle         (RXELECIDLE),
+
     .RXBYTEISALIGNED    (RXBYTEISALIGNED),
     .RXBYTEREALIGN      (RXBYTEREALIGN),
     .RXCOMMADET         (RXCOMMADET),
@@ -167,6 +171,8 @@ aligner(
     .RXMCOMMAALIGNEN    (RXMCOMMAALIGNEN)
 );
 
+wire [data_width - 1:0] internal_data;
+wire [isk_width  - 1:0] internal_isk;
 // 10x8 decoder
 gtxe2_chnl_rx_10x8dec #(
     .iwidth             (internal_data_width),
@@ -181,12 +187,41 @@ decoder_10x8(
     .RX8B10BEN      (RX8B10BEN),
 
     .RXCHARISCOMMA  (RXCHARISCOMMA),
-    .RXCHARISK      (RXCHARISK),
+    .RXCHARISK      (internal_isk),
     .RXDISPERR      (RXDISPERR),
     .RXNOTINTABLE   (RXNOTINTABLE),
 
     .outdata        (),
-    .RXDATA         (RXDATA)
+    .RXDATA         (internal_data)
 );
+
+// fit data width
+// TODO make parameters awesome
+localparam data_width = 16;
+localparam if_data_width = 32;
+localparam isk_width = 2;
+localparam if_isk_width = 4;
+
+
+gtxe2_chnl_rx_dataiface #(
+    .internal_data_width    (data_width),
+    .interface_data_width   (if_data_width),
+    .internal_isk_width     (isk_width),
+    .interface_isk_width    (if_isk_width)
+)
+dataiface
+(
+    .usrclk     (RXUSRCLK),
+    .usrclk2    (RXUSRCLK2),
+    .reset      (reset),
+    .indata     (internal_data),
+    .inisk      (internal_isk),
+    .outdata    (RXDATA[if_data_width - 1:0]),
+    .outisk     (RXCHARISK[if_isk_width - 1:0]),
+    .realign    (RXBYTEREALIGN === 1'bx ? 1'b0 : RXBYTEREALIGN)
+);
+
+assign  RXDATA[63:if_data_width]    = 0;
+assign  RXCHARISK[7:if_isk_width]   = 0;
 
 endmodule

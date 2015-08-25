@@ -37,10 +37,10 @@ module gtxe2_chnl_tx_oob #(
 parameter   [3:0]   SATA_BURST_SEQ_LEN = 4'b0101;
 parameter           SATA_CPLL_CFG = "VCO_3000MHZ";
 
-localparam  burst_len_mult  = SATA_CPLL_CFG == "VCO_3000MHZ" ? 4
-                            : SATA_CPLL_CFG == "VCO_1500MHZ" ? 2 
-                            : /*                VCO_750MHZ */  1;
-localparam  burst_len       = burst_len_mult * 8; // = 106.7ns; each burst contains 16 SATA Gen1 words
+localparam  burst_len_mult  = SATA_CPLL_CFG == "VCO_3000MHZ" ? 2 // assuming each usrclk cycle == 20 sata serial clk cycles
+                            : SATA_CPLL_CFG == "VCO_1500MHZ" ? 4 
+                            : /*                VCO_6000MHZ */ 1;
+localparam  burst_len       = /*burst_len_mult * 8*/ 32; // = 106.7ns; each burst contains 16 SATA Gen1 words
 localparam  quiet_len_init  = burst_len * 3; // = 320ns
 localparam  quiet_len_wake  = burst_len; // = 106.7ns
 localparam  init_bursts_cnt = SATA_BURST_SEQ_LEN;//3;
@@ -88,8 +88,8 @@ end
 assign  set_burst = state_idle & (TXCOMINIT | TXCOMWAKE) | state_quiet & clr_quiet & ~TXCOMFINISH;
 assign  set_quiet = state_burst & (bursts_cnt < bursts_cnt_togo - 1) & clr_burst;
 
-assign  clr_burst = state_burst & stopwatch == burst_len;
-assign  clr_quiet = state_quiet & stopwatch == quiet_len;
+assign  clr_burst = state_burst & stopwatch == (burst_len - burst_len_mult);
+assign  clr_quiet = state_quiet & stopwatch == (quiet_len - burst_len_mult);
 
 // bursts timing
 assign  quiet_len = issued_wake ? quiet_len_wake : quiet_len_init;

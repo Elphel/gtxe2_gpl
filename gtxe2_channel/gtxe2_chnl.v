@@ -18,9 +18,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-//`include "gtxe2_chnl_clocking.v"
-//`include "gtxe2_chnl_tx.v"
-//`include "gtxe2_chnl_rx.v"
+`include "gtxe2_chnl_clocking.v"
+`include "gtxe2_chnl_tx.v"
+`include "gtxe2_chnl_rx.v"
 module gtxe2_chnl(
     input   wire            reset,
 /*
@@ -117,6 +117,7 @@ module gtxe2_chnl(
     input   wire    [2:0]   TXOUTCLKSEL,
     input   wire    [2:0]   RXOUTCLKSEL,
     input   wire            TXDLYBYPASS,
+    input   wire            RXDLYBYPASS,
     output  wire            GTREFCLKMONITOR,
 
     input   wire            CPLLLOCKDETCLK, 
@@ -275,11 +276,6 @@ gtxe2_chnl_clocking #(
     .SATA_CPLL_CFG      (SATA_CPLL_CFG),
     .PMA_RSV3           (PMA_RSV3),
 
-    .TXOUT_DIV          (TXOUT_DIV),
-//    .TXRATE             (TXRATE),
-    .RXOUT_DIV          (RXOUT_DIV),
-//    .RXRATE             (RXRATE),
-
     .TX_INT_DATAWIDTH   (TX_INT_DATAWIDTH),
     .TX_DATA_WIDTH      (TX_DATA_WIDTH),
     .RX_INT_DATAWIDTH   (RX_INT_DATAWIDTH),
@@ -301,6 +297,7 @@ clocking(
     .TXOUTCLKSEL        (TXOUTCLKSEL),
     .RXOUTCLKSEL        (RXOUTCLKSEL),
     .TXDLYBYPASS        (TXDLYBYPASS),
+    .RXDLYBYPASS        (RXDLYBYPASS),
     .GTREFCLKMONITOR    (GTREFCLKMONITOR),
 
     .CPLLLOCKDETCLK     (CPLLLOCKDETCLK),

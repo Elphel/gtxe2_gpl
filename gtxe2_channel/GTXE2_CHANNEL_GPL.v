@@ -26,7 +26,7 @@
  * Due to lack of functionality of gtxe2_gpl project as compared to the xilinx's primitive, 
  * not all of the inputs are used and not all of the outputs are driven.
  **/
-//`include "gtxe2_chnl.v"
+`include "gtxe2_chnl.v"
 module GTXE2_CHANNEL(
 // clocking ports, UG476 p.37
     input   [2:0]       CPLLREFCLKSEL,
@@ -90,13 +90,13 @@ module GTXE2_CHANNEL(
     input   [8:0]       DRPADDR,
     input               DRPCLK,
     input   [15:0]      DRPDI,
-    input   [15:0]      DRPDO,
+    output  [15:0]      DRPDO,
     input               DRPEN,
     output              DRPRDY,
     input               DRPWE,
 // Digital Monitor Ports, ug476 p.95
     input   [3:0]       CLKRSVD,
-    input   [7:0]       DMONITOROUT,
+    output  [7:0]       DMONITOROUT,
 // TX Interface Ports, ug476 p.110
     input   [7:0]       TXCHARDISPMODE,
     input   [7:0]       TXCHARDISPVAL,
@@ -113,7 +113,7 @@ module GTXE2_CHANNEL(
     input   [6:0]       TXSEQUENCE,
     input               TXSTARTSEQ,
 // TX BUffer Ports, ug476 p.134
-    input   [1:0]       TXBUFSTATUS,
+    output  [1:0]       TXBUFSTATUS,
 // TX Buffer Bypass Ports, ug476 p.136
     input               TXDLYSRESET,
     input               TXPHALIGN,
@@ -133,8 +133,8 @@ module GTXE2_CHANNEL(
     input               TXSYNCMODE,
     input               TXSYNCALLIN,
     input               TXSYNCIN,
-    input               TXSYNCOUT,
-    input               TXSYNCDONE,
+    output              TXSYNCOUT,
+    output              TXSYNCDONE,
 // TX Pattern Generator, ug476 p.147
     input   [2:0]       TXPRBSSEL,
     input               TXPRBSFORCEERR,
@@ -177,7 +177,7 @@ module GTXE2_CHANNEL(
 // TX Receiver Detection Ports, ug476 p.165
     input               TXDETECTRX,
     output              PHYSTATUS,
-    input   [2:0]       RXSTATUS,
+    output  [2:0]       RXSTATUS,
 // TX OOB Signaling Ports, ug476 p.166
     output              TXCOMFINISH,
     input               TXCOMINIT,
@@ -222,7 +222,7 @@ module GTXE2_CHANNEL(
     input               RXDFEXYDOVRDEN,
     input               RXDFEXYDEN,
     input   [1:0]       RXMONITORSEL,
-    input   [6:0]       RXMONITOROUT,
+    output  [6:0]       RXMONITOROUT,
 // CDR Ports, ug476 p.202
     input               RXCDRHOLD,
     input               RXCDROVRDEN,
@@ -275,9 +275,9 @@ module GTXE2_CHANNEL(
     output              RXPHSLIPMONITOR,
     output              RXDLYSRESETDONE,
 // RX Buffer Ports, ug476 p.259
-    input   [2:0]       RXBUFSTATUS,
+    output  [2:0]       RXBUFSTATUS,
 // RX Clock Correction Ports, ug476 p.263
-    input   [1:0]       RXCLKCORCNT,
+    output  [1:0]       RXCLKCORCNT,
 // RX Channel Bonding Ports, ug476 p.274
     output              RXCHANBONDSEQ,
     output              RXCHANISALIGNED,
@@ -291,7 +291,7 @@ module GTXE2_CHANNEL(
 // RX Gearbox Ports, ug476 p.285
     output              RXDATAVALID,
     input               RXGEARBOXSLIP,
-    input   [2:0]       RXHEADER,
+    output  [2:0]       RXHEADER,
     output              RXHEADERVALID,
     output              RXSTARTOFSEQ,
 // FPGA RX Interface Ports, ug476 p.299
@@ -561,7 +561,17 @@ parameter   RXGEARBOX_EN                 = "FALSE";
 parameter   RX_CLK25_DIV                 = 6;
 parameter   TX_CLK25_DIV                 = 6;
 
-wire reset = EYESCANRESET | RXCDRFREQRESET | RXCDRRESET | RXCDRRESETRSV | RXPRBSCNTRESET | RXBUFRESET | RXDLYSRESET | RXPHDLYRESET | RXDFELPMRESET | GTRXRESET | RXOOBRESET | RXPCSRESET | RXPMARESET | CFGRESET | GTTXRESET | GTRESETSEL | RESETOVRD | TXDLYSRESET | TXPHDLYRESET | TXPCSRESET | TXPMARESET;
+// clocking reset ( + TX PMA)
+wire clk_reset = EYESCANRESET | RXCDRFREQRESET | RXCDRRESET | RXCDRRESETRSV | RXPRBSCNTRESET | RXBUFRESET | RXDLYSRESET | RXPHDLYRESET | RXDFELPMRESET | GTRXRESET | RXOOBRESET | RXPCSRESET | RXPMARESET | CFGRESET | GTTXRESET | GTRESETSEL | RESETOVRD | TXDLYSRESET | TXPHDLYRESET | TXPCSRESET | TXPMARESET;
+// have to wait before an external pll (mmcm) locks with usrclk, after that PCS can be resetted. Actually, we reset PMA also, because why not
+reg reset;
+reg [31:0] reset_timer = 0;
+always @ (posedge TXUSRCLK)
+    reset_timer <= ~TXUSERRDY ? 32'h0 : reset_timer == 32'hffffffff ? reset_timer : reset_timer + 1'b1;
+
+always @ (posedge TXUSRCLK)
+    reset <= ~TXUSERRDY ? 1'b0 : reset_timer < 32'd20 ? 1'b1 : 1'b0;
+
 
 reg rx_rst_done = 1'b0;
 reg tx_rst_done = 1'b0;
@@ -598,11 +608,6 @@ gtxe2_chnl #(
     .SATA_CPLL_CFG          (SATA_CPLL_CFG),
     .PMA_RSV3               (PMA_RSV3),
 
-    .TXOUT_DIV              (TXOUT_DIV),
-//  .TXRATE                 (TXRATE),
-    .RXOUT_DIV              (RXOUT_DIV),
-//  .RXRATE                 (RXRATE),
-
     .TX_INT_DATAWIDTH       (TX_INT_DATAWIDTH),
     .TX_DATA_WIDTH          (TX_DATA_WIDTH),
 
@@ -624,8 +629,7 @@ gtxe2_chnl #(
     .TX_INT_DATAWIDTH       (TX_INT_DATAWIDTH),
     .PTX8B10BEN             (1),
 
-    .SATA_BURST_SEQ_LEN     (SATA_BURST_SEQ_LEN),
-    .SATA_CPLL_CFG          (SATA_CPLL_CFG)
+    .SATA_BURST_SEQ_LEN     (SATA_BURST_SEQ_LEN)
 )
 channel(
     .reset                  (reset),

@@ -18,7 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-//`include "resync_fifo_nonsynt.v"
+`include "resync_fifo_nonsynt.v"
 module gtxe2_chnl_rx_des #(
     parameter [31:0] width = 20
 )

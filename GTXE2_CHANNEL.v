@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Module: GTXE2_CHANNEL
- * Date: 2015-07-08
+ * Date: 2015-08-24
  * Author: Alexey     
  * Description: emulates GTXE2_CHANNEL primitive behaviour. 
  *              The file is gathered from multiple files
@@ -256,6 +256,7 @@ module gtxe2_chnl_clocking(
     input   wire    [2:0]   TXOUTCLKSEL,
     input   wire    [2:0]   RXOUTCLKSEL,
     input   wire            TXDLYBYPASS,
+    input   wire            RXDLYBYPASS,
     output  wire            GTREFCLKMONITOR,
 
     input   wire            CPLLLOCKDETCLK, 
@@ -363,6 +364,7 @@ tx_toserialclk_div(
 
     .div        (tx_serial_divider)
 );
+wire    rx_sipo_clk;
 clock_divider #(
 //    .divide_by  (rx_serial_divider),
     .divide_by_param (0)
@@ -629,7 +631,7 @@ wire    [word_count - 1:0]  word_disparity;
 wire    [word_count - 1:0]  interm_disparity;
 wire    [5:0]               six     [word_count - 1:0];
 wire    [3:0]               four    [word_count - 1:0];
-wire    [owidth - 1:0]      oword   [word_count - 1:0];
+wire    [9:0]               oword   [word_count - 1:0];
 wire    [iwidth - 1:0]      iword   [word_count - 1:0];
 wire    [word_count - 1:0]  is_control;
 
@@ -644,7 +646,7 @@ begin: encode_by_word
     assign  iword[ii]           = data_in[ii*8 + 7:ii*8];
     assign  interm_disparity[ii]= ^six[ii] ? word_disparity[ii] : ~word_disparity[ii];
     assign  word_disparity[ii]  = (ii == 0)  ? disparity :
-                                               (^oword[ii - 1] ? ~word_disparity[ii - 1] : word_disparity[ii - 1]);
+                                               (^oword[ii - 1] ? word_disparity[ii - 1] : ~word_disparity[ii - 1]); // if there're 5 '1's - do no change the disparity, 6 or 4 - change
     assign  six[ii] = iword[ii][4:0] == 5'b00000 ? (~word_disparity[ii] ? 6'b100111 : 6'b011000)
                     : iword[ii][4:0] == 5'b00001 ? (~word_disparity[ii] ? 6'b011101 : 6'b100010)
                     : iword[ii][4:0] == 5'b00010 ? (~word_disparity[ii] ? 6'b101101 : 6'b010010)
@@ -684,7 +686,7 @@ begin: encode_by_word
                      : iword[ii][7:5] == 3'd4 ? (~interm_disparity[ii] ? 4'b1101 : 4'b0010)
                      : iword[ii][7:5] == 3'd5 ? (~interm_disparity[ii] ? 4'b1010 : 4'b1010)
                      : iword[ii][7:5] == 3'd6 ? (~interm_disparity[ii] ? 4'b0110 : 4'b0110)
-                     :/*iword[ii][7:5] == 3'd7*/(~interm_disparity[ii] ? (six[ii][1:0] == 2'b00 ? 4'b1110 : 4'b0111) 
+                     :/*iword[ii][7:5] == 3'd7*/(~interm_disparity[ii] ? (six[ii][1:0] == 2'b11 ? 4'b0111 : 4'b1110) 
                                                                        : (six[ii][1:0] == 2'b00 ? 4'b1000 : 4'b0001));
     assign  oword[ii] = ~is_control[ii] ? {six[ii], four[ii]} 
                                         : iword[ii][7:0] == 8'b00011100 ? (~word_disparity[ii] ? 10'b0011110100 : 10'b1100001011)
@@ -703,7 +705,7 @@ begin: encode_by_word
     assign  data_out[ii*10 + 9:ii * 10] = oword[ii];
 end
 endgenerate
-assign  next_disparity = ^oword[word_count - 1] ? ~word_disparity[word_count - 1] : word_disparity[word_count - 1];
+assign  next_disparity = ^oword[word_count - 1] ? word_disparity[word_count - 1] : ~word_disparity[word_count - 1];
 
 endmodule
 
@@ -726,10 +728,10 @@ module gtxe2_chnl_tx_oob #(
 parameter   [3:0]   SATA_BURST_SEQ_LEN = 4'b0101;
 parameter           SATA_CPLL_CFG = "VCO_3000MHZ";
 
-localparam  burst_len_mult  = SATA_CPLL_CFG == "VCO_3000MHZ" ? 4
-                            : SATA_CPLL_CFG == "VCO_1500MHZ" ? 2 
-                            : /*                VCO_750MHZ */  1;
-localparam  burst_len       = burst_len_mult * 8; // = 106.7ns; each burst contains 16 SATA Gen1 words
+localparam  burst_len_mult  = SATA_CPLL_CFG == "VCO_3000MHZ" ? 2 // assuming each usrclk cycle == 20 sata serial clk cycles
+                            : SATA_CPLL_CFG == "VCO_1500MHZ" ? 4 
+                            : /*                VCO_6000MHZ */ 1;
+localparam  burst_len       = /*burst_len_mult * 8*/ 32; // = 106.7ns; each burst contains 16 SATA Gen1 words
 localparam  quiet_len_init  = burst_len * 3; // = 320ns
 localparam  quiet_len_wake  = burst_len; // = 106.7ns
 localparam  init_bursts_cnt = SATA_BURST_SEQ_LEN;//3;
@@ -777,8 +779,8 @@ end
 assign  set_burst = state_idle & (TXCOMINIT | TXCOMWAKE) | state_quiet & clr_quiet & ~TXCOMFINISH;
 assign  set_quiet = state_burst & (bursts_cnt < bursts_cnt_togo - 1) & clr_burst;
 
-assign  clr_burst = state_burst & stopwatch == burst_len;
-assign  clr_quiet = state_quiet & stopwatch == quiet_len;
+assign  clr_burst = state_burst & stopwatch == (burst_len - burst_len_mult);
+assign  clr_quiet = state_quiet & stopwatch == (quiet_len - burst_len_mult);
 
 // bursts timing
 assign  quiet_len = issued_wake ? quiet_len_wake : quiet_len_init;
@@ -805,6 +807,67 @@ assign  outdata     = disparity ? outdata_pos : outdata_neg;
 assign  outval      = state_burst;
 
 assign  TXCOMFINISH = bursts_cnt_clr & bursts_cnt == bursts_cnt_togo;
+
+endmodule
+
+/*
+ * According to the doc, p110
+ * If TX_INT_DATAWIDTH, the inner width = 32 bits, otherwise 16.
+ */
+
+module gtxe2_chnl_tx_dataiface #(
+    parameter   internal_data_width = 16,
+    parameter   interface_data_width = 32,
+    parameter   internal_isk_width = 2,
+    parameter   interface_isk_width = 4
+)
+(
+    input   wire    usrclk,
+    input   wire    usrclk2,
+    input   wire    reset,
+    output  wire    [internal_data_width - 1:0]     outdata,
+    output  wire    [internal_isk_width - 1:0]      outisk,
+    input   wire    [interface_data_width - 1:0]    indata,
+    input   wire    [interface_isk_width - 1:0]     inisk
+);
+
+localparam div = interface_data_width / internal_data_width;
+
+wire    [interface_data_width + interface_isk_width - 1:0] data_resynced;
+
+reg     [31:0]          wordcounter;
+wire                    almost_empty_rd;
+wire                    empty_rd;
+wire                    full_wr;
+wire                    val_rd;
+
+always @ (posedge usrclk)
+    wordcounter <= reset | wordcounter == (div - 1) ? 32'h0 : wordcounter + 1'b1;
+ 
+
+assign  outdata = data_resynced[(wordcounter + 1) * internal_data_width - 1 -: internal_data_width];
+assign  outisk  = data_resynced[(wordcounter + 1) * internal_isk_width + internal_data_width * div - 1 -: internal_isk_width];
+assign  val_rd  = ~almost_empty_rd & ~empty_rd & wordcounter == (div - 1);
+
+resync_fifo_nonsynt #(
+    .width      (interface_data_width + interface_isk_width),
+    .log_depth  (3)
+)
+fifo(
+    .rst_rd     (reset),
+    .rst_wr     (reset),
+    .clk_wr     (usrclk2),
+    .val_wr     (1'b1),
+    .data_wr    ({inisk, indata}),
+    .clk_rd     (usrclk),
+    .val_rd     (val_rd),
+    .data_rd    ({data_resynced}),
+
+    .empty_rd   (empty_rd),
+    .full_wr    (full_wr),
+
+    .almost_empty_rd   (almost_empty_rd)
+);
 
 endmodule
 
@@ -883,12 +946,15 @@ wire    line_idle;
 wire    line_idle_pcs; // line_idle in pcs clock domain
 wire    [internal_data_width - 1:0] ser_input;
 wire    oob_active;
+reg     oob_in_process;
+always @ (posedge TXUSRCLK)
+    oob_in_process <= reset | TXCOMFINISH ? 1'b0 : TXCOMINIT | TXCOMWAKE ? 1'b1 : oob_in_process;
 
 assign  TXP = ~line_idle ? serial_data : 1'bx;
 assign  TXN = ~line_idle ? ~serial_data : 1'bx;
 
 
-assign  line_idle_pcs = TXELECIDLE & ~oob_active | reset;
+assign  line_idle_pcs = (TXELECIDLE | oob_in_process) & ~oob_active | reset;
 
 // Serializer
 wire    [internal_data_width - 1:0] parallel_data;
@@ -909,6 +975,35 @@ ser(
 
 // TX PCS
 
+// fit data width
+// TODO make parameters awesome
+localparam data_width = 16;
+localparam if_data_width = 32;
+localparam isk_width = 2;
+localparam if_isk_width = 4;
+
+wire [data_width - 1:0] internal_data;
+wire [isk_width  - 1:0] internal_isk;
+
+gtxe2_chnl_tx_dataiface #(
+    .internal_data_width    (data_width),
+    .interface_data_width   (if_data_width),
+    .internal_isk_width     (isk_width),
+    .interface_isk_width    (if_isk_width)
+)
+dataiface
+(
+    .usrclk     (TXUSRCLK),
+    .usrclk2    (TXUSRCLK2),
+    .reset      (reset),
+    .outdata    (internal_data),
+    .outisk     (internal_isk),
+    .indata     (TXDATA[if_data_width - 1:0]),
+    .inisk      (TXCHARISK[if_isk_width - 1:0])
+);
+
+wire    [internal_data_width - 1:0] polarized_data;
+
 // invert data (get words as [abdceifghj] after 8/10, each word shall be transmitter in a reverse bit order)
 genvar ii;
 genvar jj;
@@ -923,7 +1018,6 @@ generate
 endgenerate
 
 // Polarity:
-wire    [internal_data_width - 1:0] polarized_data;
 
 assign  ser_input = polarized_data;
 generate
@@ -941,7 +1035,9 @@ wire                                oob_val;
 
 assign  oob_active = oob_val;
 gtxe2_chnl_tx_oob #(
-    .width  (internal_data_width)
+    .width              (internal_data_width),
+    .SATA_BURST_SEQ_LEN (SATA_BURST_SEQ_LEN),
+    .SATA_CPLL_CFG      (SATA_CPLL_CFG)
 )
 tx_oob(
     .TXCOMINIT      (TXCOMINIT),
@@ -971,9 +1067,9 @@ encoder_8x10(
     .TX8B10BEN          (TX8B10BEN),
     .TXCHARDISPMODE     (TXCHARDISPMODE),
     .TXCHARDISPVAL      (TXCHARDISPVAL),
-    .TXCHARISK          (TXCHARISK),
+    .TXCHARISK          (internal_isk),
     .disparity          (disparity),
-    .data_in            (TXDATA[15:0]),
+    .data_in            (internal_data),
     .data_out           (encoded_data),
     .next_disparity     (next_disparity)
 );
@@ -1130,6 +1226,7 @@ module gtxe2_chnl_rx_oob #(
 (
     input   wire            reset,
     input   wire            clk,
+    input   wire            usrclk2,
     input   wire            RXN,
     input   wire            RXP,
 
@@ -1147,11 +1244,11 @@ localparam wake_idle_min_len = 150;
 localparam wake_idle_max_len = 340;
 localparam init_idle_min_len = 450;
 localparam init_idle_max_len = 990;
-localparam wake_bursts_cnt = 5;
-localparam init_bursts_cnt = 5;
+localparam wake_bursts_cnt = SATA_BURST_VAL;
+localparam init_bursts_cnt = SATA_BURST_VAL;
 
 wire    idle;
-assign  idle = (RXN == RXP) | (RXP === 1'bx);
+assign  idle = (RXN == RXP) | (RXP === 1'bx) | (RXP === 1'bz);
 
 wire    state_notrans;
 wire    state_error; //nostrans substate
@@ -1224,8 +1321,24 @@ assign  done_init   = state_burst & ~idle & bursts_cnt == (init_bursts_cnt - 1)&
 assign  set_error   = idle_len_violation | burst_len_violation;
 assign  set_done    = ~set_error & (done_wake | done_init);
 
-assign  RXCOMINITDET = done_init;
-assign  RXCOMWAKEDET = done_wake;
+// just to rxcominit(wake)det be synchronous to usrclk2
+reg rxcominitdet_clk;
+reg rxcominitdet_usrclk2;
+reg rxcomwakedet_clk;
+reg rxcomwakedet_usrclk2;
+always @ (posedge clk)
+begin
+    rxcominitdet_clk <= reset ? 1'b0 : done_init | rxcominitdet_clk & ~rxcominitdet_usrclk2;
+    rxcomwakedet_clk <= reset ? 1'b0 : done_wake | rxcomwakedet_clk & ~rxcomwakedet_usrclk2;
+end
+always @ (posedge usrclk2)
+begin
+    rxcominitdet_usrclk2 <= reset ? 1'b0 : rxcominitdet_clk & ~rxcominitdet_usrclk2;
+    rxcomwakedet_usrclk2 <= reset ? 1'b0 : rxcomwakedet_clk & ~rxcomwakedet_usrclk2;
+end
+assign  RXCOMINITDET = rxcominitdet_usrclk2;
+assign  RXCOMWAKEDET = rxcomwakedet_usrclk2;
+assign  RXELECIDLE = RXP === 1'bz ? 1'b1 : RXP === 1'bx ? 1'b1 : RXP == RXN;
 
 endmodule
 
@@ -1438,6 +1551,8 @@ module gtxe2_chnl_rx_align #(
     input   wire    [width - 1:0]   indata,
     output  wire    [width - 1:0]   outdata,
 
+    input   wire                    rxelecidle,
+
     output  wire                    RXBYTEISALIGNED,
     output  wire                    RXBYTEREALIGN,
     output  wire                    RXCOMMADET,
@@ -1461,6 +1576,29 @@ always @ (posedge clk)
 
 // finding matches
 wire    [comma_width - 1:0] comma_window [window_size - 1:0];
+//initial
+//  for (idx = 0; idx < window_size; idx = idx + 1) $dumpvars(0, comma_width[idx]);
+wire    [comma_width - 1:0] comma_window0 = comma_window[0];
+wire    [comma_width - 1:0] comma_window1 = comma_window[1];
+wire    [comma_width - 1:0] comma_window2 = comma_window[2];
+wire    [comma_width - 1:0] comma_window3 = comma_window[3];
+wire    [comma_width - 1:0] comma_window4 = comma_window[4];
+wire    [comma_width - 1:0] comma_window5 = comma_window[5];
+wire    [comma_width - 1:0] comma_window6 = comma_window[6];
+wire    [comma_width - 1:0] comma_window7 = comma_window[7];
+wire    [comma_width - 1:0] comma_window8 = comma_window[8];
+wire    [comma_width - 1:0] comma_window9 = comma_window[9];
+wire    [comma_width - 1:0] comma_window10 = comma_window[10];
+wire    [comma_width - 1:0] comma_window11 = comma_window[11];
+wire    [comma_width - 1:0] comma_window12 = comma_window[12];
+wire    [comma_width - 1:0] comma_window13 = comma_window[13];
+wire    [comma_width - 1:0] comma_window14 = comma_window[14];
+wire    [comma_width - 1:0] comma_window15 = comma_window[15];
+wire    [comma_width - 1:0] comma_window16 = comma_window[16];
+wire    [comma_width - 1:0] comma_window17 = comma_window[17];
+wire    [comma_width - 1:0] comma_window18 = comma_window[18];
+wire    [comma_width - 1:0] comma_window19 = comma_window[19];
+
 wire    [window_size - 1:0] comma_match; // shows all matches
 wire    [window_size - 1:0] comma_pos; // shows the first match
 wire    [window_size - 1:0] pcomma_match;
@@ -1537,9 +1675,98 @@ assign  RXBYTEREALIGN = RXCOMMADETEN & is_aligned & pointer_set;
 
 always @ (posedge clk)
 begin
-    is_aligned      <= rst ? 1'b0 : ~is_aligned & pointer_set | is_aligned;
+    is_aligned      <= rst | pointer_set === 1'bx | rxelecidle ? 1'b0 : ~is_aligned & pointer_set | is_aligned;
     pointer_latched <= rst ? 1'b0 : pointer_set ? pointer : pointer_latched;
 end
+
+endmodule
+
+/*
+ * According to the doc, p110
+ * If RX_INT_DATAWIDTH, the inner width = 32 bits, otherwise 16.
+ */
+
+module gtxe2_chnl_rx_dataiface #(
+    parameter   internal_data_width = 16,
+    parameter   interface_data_width = 32,
+    parameter   internal_isk_width = 2,
+    parameter   interface_isk_width = 4
+)
+(
+    input   wire    usrclk,
+    input   wire    usrclk2,
+    input   wire    reset,
+    output  wire    [interface_data_width - 1:0]    outdata,
+    output  wire    [interface_isk_width - 1:0]     outisk,
+    input   wire    [internal_data_width - 1:0]     indata,
+    input   wire    [internal_isk_width - 1:0]      inisk,
+    input   wire                                    realign
+);
+
+localparam div = interface_data_width / internal_data_width;
+localparam internal_total_width = internal_data_width + internal_isk_width;
+localparam interface_total_width = interface_data_width + interface_isk_width;
+
+reg     [interface_data_width - 1:0]   inbuffer_data;
+reg     [interface_isk_width - 1:0]    inbuffer_isk;
+reg     [31:0]          wordcounter;
+wire                    empty_rd;
+wire                    full_wr;
+wire                    val_wr;
+wire                    val_rd;
+
+always @ (posedge usrclk)
+    wordcounter  <= reset ? 32'h0 : realign & ~(div == 0) ? 31'b1 : wordcounter == (div - 1) ? 32'h0 : wordcounter + 1'b1;
+
+genvar ii;
+generate
+for (ii = 0; ii < div; ii = ii + 1)
+begin: splicing
+    always @ (posedge usrclk)
+        inbuffer_data[(ii + 1) * internal_data_width - 1 -: internal_data_width] <= reset ? {interface_data_width{1'b0}} : ((wordcounter == ii) | realign & (0 == ii)) ? indata : inbuffer_data[(ii + 1) * internal_data_width - 1 -: internal_data_width];
+end
+endgenerate
+generate
+for (ii = 0; ii < div; ii = ii + 1)
+begin: splicing2
+    always @ (posedge usrclk)
+        inbuffer_isk[(ii + 1) * internal_isk_width - 1 -: internal_isk_width] <= reset ? {interface_isk_width{1'b0}} : ((wordcounter == ii) | realign & (0 == ii)) ? inisk : inbuffer_isk[(ii + 1) * internal_isk_width - 1 -: internal_isk_width];
+end
+endgenerate
+
+assign  val_rd  = ~empty_rd & ~almost_empty_rd;
+assign  val_wr  = ~full_wr & wordcounter == (div - 1);
+
+always @ (posedge usrclk)
+    if (full_wr)
+    begin
+        $display("FIFO in %m is full, that is not an appropriate behaviour");
+        $finish;
+    end
+
+wire    [interface_total_width - 1:0] resync;
+assign  outdata = resync[interface_data_width - 1:0];
+assign  outisk  = resync[interface_data_width + interface_isk_width - 1:interface_data_width];
+
+resync_fifo_nonsynt #(
+    .width      (interface_total_width),
+    .log_depth  (3)
+)
+fifo(
+    .rst_rd     (reset),
+    .rst_wr     (reset),
+    .clk_wr     (usrclk2),
+    .val_wr     (val_wr),
+    .data_wr    ({inisk, inbuffer_isk[interface_isk_width - internal_isk_width - 1 : 0], indata, inbuffer_data[interface_data_width - internal_data_width - 1 : 0]}),
+    .clk_rd     (usrclk2),
+    .val_rd     (val_rd),
+    .data_rd    (resync),
+
+    .empty_rd   (empty_rd),
+    .full_wr    (full_wr),
+
+    .almost_empty_rd (almost_empty_rd)
+);
 
 endmodule
 
@@ -1629,6 +1856,7 @@ gtxe2_chnl_rx_oob #(
 rx_oob(
     .reset          (reset),
     .clk            (serial_clk),
+    .usrclk2        (RXUSRCLK2),
     .RXN            (RXN),
     .RXP            (RXP),
 
@@ -1676,6 +1904,8 @@ aligner(
     .indata             (parallel_data),
     .outdata            (aligned_data),
 
+    .rxelecidle         (RXELECIDLE),
+
     .RXBYTEISALIGNED    (RXBYTEISALIGNED),
     .RXBYTEREALIGN      (RXBYTEREALIGN),
     .RXCOMMADET         (RXCOMMADET),
@@ -1685,6 +1915,8 @@ aligner(
     .RXMCOMMAALIGNEN    (RXMCOMMAALIGNEN)
 );
 
+wire [data_width - 1:0] internal_data;
+wire [isk_width  - 1:0] internal_isk;
 // 10x8 decoder
 gtxe2_chnl_rx_10x8dec #(
     .iwidth             (internal_data_width),
@@ -1699,13 +1931,42 @@ decoder_10x8(
     .RX8B10BEN      (RX8B10BEN),
 
     .RXCHARISCOMMA  (RXCHARISCOMMA),
-    .RXCHARISK      (RXCHARISK),
+    .RXCHARISK      (internal_isk),
     .RXDISPERR      (RXDISPERR),
     .RXNOTINTABLE   (RXNOTINTABLE),
 
     .outdata        (),
-    .RXDATA         (RXDATA)
+    .RXDATA         (internal_data)
 );
+
+// fit data width
+// TODO make parameters awesome
+localparam data_width = 16;
+localparam if_data_width = 32;
+localparam isk_width = 2;
+localparam if_isk_width = 4;
+
+
+gtxe2_chnl_rx_dataiface #(
+    .internal_data_width    (data_width),
+    .interface_data_width   (if_data_width),
+    .internal_isk_width     (isk_width),
+    .interface_isk_width    (if_isk_width)
+)
+dataiface
+(
+    .usrclk     (RXUSRCLK),
+    .usrclk2    (RXUSRCLK2),
+    .reset      (reset),
+    .indata     (internal_data),
+    .inisk      (internal_isk),
+    .outdata    (RXDATA[if_data_width - 1:0]),
+    .outisk     (RXCHARISK[if_isk_width - 1:0]),
+    .realign    (RXBYTEREALIGN === 1'bx ? 1'b0 : RXBYTEREALIGN)
+);
+
+assign  RXDATA[63:if_data_width]    = 0;
+assign  RXCHARISK[7:if_isk_width]   = 0;
 
 endmodule
 
@@ -1805,6 +2066,7 @@ module gtxe2_chnl(
     input   wire    [2:0]   TXOUTCLKSEL,
     input   wire    [2:0]   RXOUTCLKSEL,
     input   wire            TXDLYBYPASS,
+    input   wire            RXDLYBYPASS,
     output  wire            GTREFCLKMONITOR,
 
     input   wire            CPLLLOCKDETCLK, 
@@ -1963,11 +2225,6 @@ gtxe2_chnl_clocking #(
     .SATA_CPLL_CFG      (SATA_CPLL_CFG),
     .PMA_RSV3           (PMA_RSV3),
 
-    .TXOUT_DIV          (TXOUT_DIV),
-//    .TXRATE             (TXRATE),
-    .RXOUT_DIV          (RXOUT_DIV),
-//    .RXRATE             (RXRATE),
-
     .TX_INT_DATAWIDTH   (TX_INT_DATAWIDTH),
     .TX_DATA_WIDTH      (TX_DATA_WIDTH),
     .RX_INT_DATAWIDTH   (RX_INT_DATAWIDTH),
@@ -1989,6 +2246,7 @@ clocking(
     .TXOUTCLKSEL        (TXOUTCLKSEL),
     .RXOUTCLKSEL        (RXOUTCLKSEL),
     .TXDLYBYPASS        (TXDLYBYPASS),
+    .RXDLYBYPASS        (RXDLYBYPASS),
     .GTREFCLKMONITOR    (GTREFCLKMONITOR),
 
     .CPLLLOCKDETCLK     (CPLLLOCKDETCLK),
@@ -2080,13 +2338,13 @@ module GTXE2_CHANNEL(
     input   [8:0]       DRPADDR,
     input               DRPCLK,
     input   [15:0]      DRPDI,
-    input   [15:0]      DRPDO,
+    output  [15:0]      DRPDO,
     input               DRPEN,
     output              DRPRDY,
     input               DRPWE,
 // Digital Monitor Ports, ug476 p.95
     input   [3:0]       CLKRSVD,
-    input   [7:0]       DMONITOROUT,
+    output  [7:0]       DMONITOROUT,
 // TX Interface Ports, ug476 p.110
     input   [7:0]       TXCHARDISPMODE,
     input   [7:0]       TXCHARDISPVAL,
@@ -2103,7 +2361,7 @@ module GTXE2_CHANNEL(
     input   [6:0]       TXSEQUENCE,
     input               TXSTARTSEQ,
 // TX BUffer Ports, ug476 p.134
-    input   [1:0]       TXBUFSTATUS,
+    output  [1:0]       TXBUFSTATUS,
 // TX Buffer Bypass Ports, ug476 p.136
     input               TXDLYSRESET,
     input               TXPHALIGN,
@@ -2123,8 +2381,8 @@ module GTXE2_CHANNEL(
     input               TXSYNCMODE,
     input               TXSYNCALLIN,
     input               TXSYNCIN,
-    input               TXSYNCOUT,
-    input               TXSYNCDONE,
+    output              TXSYNCOUT,
+    output              TXSYNCDONE,
 // TX Pattern Generator, ug476 p.147
     input   [2:0]       TXPRBSSEL,
     input               TXPRBSFORCEERR,
@@ -2167,7 +2425,7 @@ module GTXE2_CHANNEL(
 // TX Receiver Detection Ports, ug476 p.165
     input               TXDETECTRX,
     output              PHYSTATUS,
-    input   [2:0]       RXSTATUS,
+    output  [2:0]       RXSTATUS,
 // TX OOB Signaling Ports, ug476 p.166
     output              TXCOMFINISH,
     input               TXCOMINIT,
@@ -2212,7 +2470,7 @@ module GTXE2_CHANNEL(
     input               RXDFEXYDOVRDEN,
     input               RXDFEXYDEN,
     input   [1:0]       RXMONITORSEL,
-    input   [6:0]       RXMONITOROUT,
+    output  [6:0]       RXMONITOROUT,
 // CDR Ports, ug476 p.202
     input               RXCDRHOLD,
     input               RXCDROVRDEN,
@@ -2265,9 +2523,9 @@ module GTXE2_CHANNEL(
     output              RXPHSLIPMONITOR,
     output              RXDLYSRESETDONE,
 // RX Buffer Ports, ug476 p.259
-    input   [2:0]       RXBUFSTATUS,
+    output  [2:0]       RXBUFSTATUS,
 // RX Clock Correction Ports, ug476 p.263
-    input   [1:0]       RXCLKCORCNT,
+    output  [1:0]       RXCLKCORCNT,
 // RX Channel Bonding Ports, ug476 p.274
     output              RXCHANBONDSEQ,
     output              RXCHANISALIGNED,
@@ -2281,7 +2539,7 @@ module GTXE2_CHANNEL(
 // RX Gearbox Ports, ug476 p.285
     output              RXDATAVALID,
     input               RXGEARBOXSLIP,
-    input   [2:0]       RXHEADER,
+    output  [2:0]       RXHEADER,
     output              RXHEADERVALID,
     output              RXSTARTOFSEQ,
 // FPGA RX Interface Ports, ug476 p.299
@@ -2551,7 +2809,17 @@ parameter   RXGEARBOX_EN                 = "FALSE";
 parameter   RX_CLK25_DIV                 = 6;
 parameter   TX_CLK25_DIV                 = 6;
 
-wire reset = EYESCANRESET | RXCDRFREQRESET | RXCDRRESET | RXCDRRESETRSV | RXPRBSCNTRESET | RXBUFRESET | RXDLYSRESET | RXPHDLYRESET | RXDFELPMRESET | GTRXRESET | RXOOBRESET | RXPCSRESET | RXPMARESET | CFGRESET | GTTXRESET | GTRESETSEL | RESETOVRD | TXDLYSRESET | TXPHDLYRESET | TXPCSRESET | TXPMARESET;
+// clocking reset ( + TX PMA)
+wire clk_reset = EYESCANRESET | RXCDRFREQRESET | RXCDRRESET | RXCDRRESETRSV | RXPRBSCNTRESET | RXBUFRESET | RXDLYSRESET | RXPHDLYRESET | RXDFELPMRESET | GTRXRESET | RXOOBRESET | RXPCSRESET | RXPMARESET | CFGRESET | GTTXRESET | GTRESETSEL | RESETOVRD | TXDLYSRESET | TXPHDLYRESET | TXPCSRESET | TXPMARESET;
+// have to wait before an external pll (mmcm) locks with usrclk, after that PCS can be resetted. Actually, we reset PMA also, because why not
+reg reset;
+reg [31:0] reset_timer = 0;
+always @ (posedge TXUSRCLK)
+    reset_timer <= ~TXUSERRDY ? 32'h0 : reset_timer == 32'hffffffff ? reset_timer : reset_timer + 1'b1;
+
+always @ (posedge TXUSRCLK)
+    reset <= ~TXUSERRDY ? 1'b0 : reset_timer < 32'd20 ? 1'b1 : 1'b0;
+
 
 reg rx_rst_done = 1'b0;
 reg tx_rst_done = 1'b0;
@@ -2588,11 +2856,6 @@ gtxe2_chnl #(
     .SATA_CPLL_CFG          (SATA_CPLL_CFG),
     .PMA_RSV3               (PMA_RSV3),
 
-    .TXOUT_DIV              (TXOUT_DIV),
-//  .TXRATE                 (TXRATE),
-    .RXOUT_DIV              (RXOUT_DIV),
-//  .RXRATE                 (RXRATE),
-
     .TX_INT_DATAWIDTH       (TX_INT_DATAWIDTH),
     .TX_DATA_WIDTH          (TX_DATA_WIDTH),
 
@@ -2614,8 +2877,7 @@ gtxe2_chnl #(
     .TX_INT_DATAWIDTH       (TX_INT_DATAWIDTH),
     .PTX8B10BEN             (1),
 
-    .SATA_BURST_SEQ_LEN     (SATA_BURST_SEQ_LEN),
-    .SATA_CPLL_CFG          (SATA_CPLL_CFG)
+    .SATA_BURST_SEQ_LEN     (SATA_BURST_SEQ_LEN)
 )
 channel(
     .reset                  (reset),

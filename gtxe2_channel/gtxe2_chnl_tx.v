@@ -19,9 +19,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-//`include "gtxe2_chnl_tx_ser.v"
-//`include "gtxe2_chnl_tx_8x10enc.v"
-//`include "gtxe2_chnl_tx_oob.v"
+`include "gtxe2_chnl_tx_ser.v"
+`include "gtxe2_chnl_tx_8x10enc.v"
+`include "gtxe2_chnl_tx_oob.v"
+`include "gtxe2_chnl_tx_dataiface.v"
 module gtxe2_chnl_tx(
     input   wire            reset,
     output  wire            TXP,
@@ -97,12 +98,15 @@ wire    line_idle;
 wire    line_idle_pcs; // line_idle in pcs clock domain
 wire    [internal_data_width - 1:0] ser_input;
 wire    oob_active;
+reg     oob_in_process;
+always @ (posedge TXUSRCLK)
+    oob_in_process <= reset | TXCOMFINISH ? 1'b0 : TXCOMINIT | TXCOMWAKE ? 1'b1 : oob_in_process;
 
 assign  TXP = ~line_idle ? serial_data : 1'bx;
 assign  TXN = ~line_idle ? ~serial_data : 1'bx;
 
 
-assign  line_idle_pcs = TXELECIDLE & ~oob_active | reset;
+assign  line_idle_pcs = (TXELECIDLE | oob_in_process) & ~oob_active | reset;
 
 // Serializer
 wire    [internal_data_width - 1:0] parallel_data;
@@ -123,6 +127,35 @@ ser(
 
 // TX PCS
 
+// fit data width
+// TODO make parameters awesome
+localparam data_width = 16;
+localparam if_data_width = 32;
+localparam isk_width = 2;
+localparam if_isk_width = 4;
+
+wire [data_width - 1:0] internal_data;
+wire [isk_width  - 1:0] internal_isk;
+
+gtxe2_chnl_tx_dataiface #(
+    .internal_data_width    (data_width),
+    .interface_data_width   (if_data_width),
+    .internal_isk_width     (isk_width),
+    .interface_isk_width    (if_isk_width)
+)
+dataiface
+(
+    .usrclk     (TXUSRCLK),
+    .usrclk2    (TXUSRCLK2),
+    .reset      (reset),
+    .outdata    (internal_data),
+    .outisk     (internal_isk),
+    .indata     (TXDATA[if_data_width - 1:0]),
+    .inisk      (TXCHARISK[if_isk_width - 1:0])
+);
+
+wire    [internal_data_width - 1:0] polarized_data;
+
 // invert data (get words as [abdceifghj] after 8/10, each word shall be transmitter in a reverse bit order)
 genvar ii;
 genvar jj;
@@ -137,7 +170,6 @@ generate
 endgenerate
 
 // Polarity:
-wire    [internal_data_width - 1:0] polarized_data;
 
 assign  ser_input = polarized_data;
 generate
@@ -155,7 +187,9 @@ wire                                oob_val;
 
 assign  oob_active = oob_val;
 gtxe2_chnl_tx_oob #(
-    .width  (internal_data_width)
+    .width              (internal_data_width),
+    .SATA_BURST_SEQ_LEN (SATA_BURST_SEQ_LEN),
+    .SATA_CPLL_CFG      (SATA_CPLL_CFG)
 )
 tx_oob(
     .TXCOMINIT      (TXCOMINIT),
@@ -185,9 +219,9 @@ encoder_8x10(
     .TX8B10BEN          (TX8B10BEN),
     .TXCHARDISPMODE     (TXCHARDISPMODE),
     .TXCHARDISPVAL      (TXCHARDISPVAL),
-    .TXCHARISK          (TXCHARISK),
+    .TXCHARISK          (internal_isk),
     .disparity          (disparity),
-    .data_in            (TXDATA[15:0]),
+    .data_in            (internal_data),
     .data_out           (encoded_data),
     .next_disparity     (next_disparity)
 );

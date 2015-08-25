@@ -36,6 +36,7 @@ module gtxe2_chnl_rx_oob #(
 (
     input   wire            reset,
     input   wire            clk,
+    input   wire            usrclk2,
     input   wire            RXN,
     input   wire            RXP,
 
@@ -53,11 +54,11 @@ localparam wake_idle_min_len = 150;
 localparam wake_idle_max_len = 340;
 localparam init_idle_min_len = 450;
 localparam init_idle_max_len = 990;
-localparam wake_bursts_cnt = 5;
-localparam init_bursts_cnt = 5;
+localparam wake_bursts_cnt = SATA_BURST_VAL;
+localparam init_bursts_cnt = SATA_BURST_VAL;
 
 wire    idle;
-assign  idle = (RXN == RXP) | (RXP === 1'bx);
+assign  idle = (RXN == RXP) | (RXP === 1'bx) | (RXP === 1'bz);
 
 wire    state_notrans;
 wire    state_error; //nostrans substate
@@ -130,7 +131,23 @@ assign  done_init   = state_burst & ~idle & bursts_cnt == (init_bursts_cnt - 1)&
 assign  set_error   = idle_len_violation | burst_len_violation;
 assign  set_done    = ~set_error & (done_wake | done_init);
 
-assign  RXCOMINITDET = done_init;
-assign  RXCOMWAKEDET = done_wake;
+// just to rxcominit(wake)det be synchronous to usrclk2
+reg rxcominitdet_clk;
+reg rxcominitdet_usrclk2;
+reg rxcomwakedet_clk;
+reg rxcomwakedet_usrclk2;
+always @ (posedge clk)
+begin
+    rxcominitdet_clk <= reset ? 1'b0 : done_init | rxcominitdet_clk & ~rxcominitdet_usrclk2;
+    rxcomwakedet_clk <= reset ? 1'b0 : done_wake | rxcomwakedet_clk & ~rxcomwakedet_usrclk2;
+end
+always @ (posedge usrclk2)
+begin
+    rxcominitdet_usrclk2 <= reset ? 1'b0 : rxcominitdet_clk & ~rxcominitdet_usrclk2;
+    rxcomwakedet_usrclk2 <= reset ? 1'b0 : rxcomwakedet_clk & ~rxcomwakedet_usrclk2;
+end
+assign  RXCOMINITDET = rxcominitdet_usrclk2;
+assign  RXCOMWAKEDET = rxcomwakedet_usrclk2;
+assign  RXELECIDLE = RXP === 1'bz ? 1'b1 : RXP === 1'bx ? 1'b1 : RXP == RXN;
 
 endmodule

@@ -18,7 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-//`include "gtxe2_chnl_cpll_def.v"
+`include "gtxe2_chnl_cpll_def.v"
 module gtxe2_chnl_cpll(
 // top-level interfaces
     input   wire    CPLLLOCKDETCLK,

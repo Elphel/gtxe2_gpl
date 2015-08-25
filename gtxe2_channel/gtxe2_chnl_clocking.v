@@ -19,10 +19,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
-//`include "gtxe2_chnl_cpll_inmux.v"
-//`include "gtxe2_chnl_outclk_mux.v"
-//`include "gtxe2_chnl_cpll.v"
-//`include "clock_divider.v"
+`include "gtxe2_chnl_cpll_inmux.v"
+`include "gtxe2_chnl_outclk_mux.v"
+`include "gtxe2_chnl_cpll.v"
+`include "clock_divider.v"
 module gtxe2_chnl_clocking(
 // top-level interfaces
     input   wire    [2:0]   CPLLREFCLKSEL,
@@ -40,6 +40,7 @@ module gtxe2_chnl_clocking(
     input   wire    [2:0]   TXOUTCLKSEL,
     input   wire    [2:0]   RXOUTCLKSEL,
     input   wire            TXDLYBYPASS,
+    input   wire            RXDLYBYPASS,
     output  wire            GTREFCLKMONITOR,
 
     input   wire            CPLLLOCKDETCLK, 
@@ -147,6 +148,7 @@ tx_toserialclk_div(
 
     .div        (tx_serial_divider)
 );
+wire    rx_sipo_clk;
 clock_divider #(
 //    .divide_by  (rx_serial_divider),
     .divide_by_param (0)

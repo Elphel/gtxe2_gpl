@@ -43,7 +43,7 @@ wire    [word_count - 1:0]  word_disparity;
 wire    [word_count - 1:0]  interm_disparity;
 wire    [5:0]               six     [word_count - 1:0];
 wire    [3:0]               four    [word_count - 1:0];
-wire    [owidth - 1:0]      oword   [word_count - 1:0];
+wire    [9:0]               oword   [word_count - 1:0];
 wire    [iwidth - 1:0]      iword   [word_count - 1:0];
 wire    [word_count - 1:0]  is_control;
 
@@ -58,7 +58,7 @@ begin: encode_by_word
     assign  iword[ii]           = data_in[ii*8 + 7:ii*8];
     assign  interm_disparity[ii]= ^six[ii] ? word_disparity[ii] : ~word_disparity[ii];
     assign  word_disparity[ii]  = (ii == 0)  ? disparity :
-                                               (^oword[ii - 1] ? ~word_disparity[ii - 1] : word_disparity[ii - 1]);
+                                               (^oword[ii - 1] ? word_disparity[ii - 1] : ~word_disparity[ii - 1]); // if there're 5 '1's - do no change the disparity, 6 or 4 - change
     assign  six[ii] = iword[ii][4:0] == 5'b00000 ? (~word_disparity[ii] ? 6'b100111 : 6'b011000)
                     : iword[ii][4:0] == 5'b00001 ? (~word_disparity[ii] ? 6'b011101 : 6'b100010)
                     : iword[ii][4:0] == 5'b00010 ? (~word_disparity[ii] ? 6'b101101 : 6'b010010)
@@ -98,7 +98,7 @@ begin: encode_by_word
                      : iword[ii][7:5] == 3'd4 ? (~interm_disparity[ii] ? 4'b1101 : 4'b0010)
                      : iword[ii][7:5] == 3'd5 ? (~interm_disparity[ii] ? 4'b1010 : 4'b1010)
                      : iword[ii][7:5] == 3'd6 ? (~interm_disparity[ii] ? 4'b0110 : 4'b0110)
-                     :/*iword[ii][7:5] == 3'd7*/(~interm_disparity[ii] ? (six[ii][1:0] == 2'b00 ? 4'b1110 : 4'b0111) 
+                     :/*iword[ii][7:5] == 3'd7*/(~interm_disparity[ii] ? (six[ii][1:0] == 2'b11 ? 4'b0111 : 4'b1110) 
                                                                        : (six[ii][1:0] == 2'b00 ? 4'b1000 : 4'b0001));
     assign  oword[ii] = ~is_control[ii] ? {six[ii], four[ii]} 
                                         : iword[ii][7:0] == 8'b00011100 ? (~word_disparity[ii] ? 10'b0011110100 : 10'b1100001011)
@@ -117,6 +117,6 @@ begin: encode_by_word
     assign  data_out[ii*10 + 9:ii * 10] = oword[ii];
 end
 endgenerate
-assign  next_disparity = ^oword[word_count - 1] ? ~word_disparity[word_count - 1] : word_disparity[word_count - 1];
+assign  next_disparity = ^oword[word_count - 1] ? word_disparity[word_count - 1] : ~word_disparity[word_count - 1];
 
 endmodule
