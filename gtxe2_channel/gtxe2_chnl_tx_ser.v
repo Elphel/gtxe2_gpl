@@ -24,6 +24,7 @@ module gtxe2_chnl_tx_ser #(
 )
 (
     input   wire                    reset,
+    input   wire                    trim,
     input   wire                    inclk,
     input   wire                    outclk,
     input   wire    [width - 1:0]   indata,
@@ -32,18 +33,23 @@ module gtxe2_chnl_tx_ser #(
     output  wire                    idle_out
 );
 
+localparam trimmed_width = width * 4 / 5;
+
 reg     [31:0]          bitcounter;
 wire    [width - 1:0]   data_resynced;
 wire                    almost_empty_rd;
 wire                    empty_rd;
 wire                    full_wr;
 wire                    val_rd;
+wire                    bitcounter_limit;
+
+assign  bitcounter_limit = trim ? bitcounter == (trimmed_width - 1) : bitcounter == (width - 1);
 
 always @ (posedge outclk)
-    bitcounter  <= reset | bitcounter == (width - 1) ? 32'h0 : bitcounter + 1'b1;
+    bitcounter  <= reset | bitcounter_limit ? 32'h0 : bitcounter + 1'b1;
  
 assign  outdata = data_resynced[bitcounter];
-assign  val_rd  = ~almost_empty_rd & ~empty_rd & bitcounter == (width - 1);
+assign  val_rd  = ~almost_empty_rd & ~empty_rd & bitcounter_limit;
 
 resync_fifo_nonsynt #(
     .width      (width + 1), // +1 is for a flag of an idle line (both TXP and TXN = 0)

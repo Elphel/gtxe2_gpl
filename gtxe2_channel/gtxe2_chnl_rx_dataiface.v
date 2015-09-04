@@ -85,6 +85,14 @@ wire    [interface_total_width - 1:0] resync;
 assign  outdata = resync[interface_data_width - 1:0];
 assign  outisk  = resync[interface_data_width + interface_isk_width - 1:interface_data_width];
 
+wire [interface_total_width - 1:0] data_wr;
+generate
+if (interface_data_width > internal_data_width)
+    assign  data_wr = {inisk, inbuffer_isk[interface_isk_width - internal_isk_width - 1 : 0], indata, inbuffer_data[interface_data_width - internal_data_width - 1 : 0]};
+else
+    assign  data_wr = {inisk, indata};
+endgenerate
+
 resync_fifo_nonsynt #(
     .width      (interface_total_width),
     .log_depth  (3)
@@ -92,9 +100,9 @@ resync_fifo_nonsynt #(
 fifo(
     .rst_rd     (reset),
     .rst_wr     (reset),
-    .clk_wr     (usrclk2),
+    .clk_wr     (usrclk),
     .val_wr     (val_wr),
-    .data_wr    ({inisk, inbuffer_isk[interface_isk_width - internal_isk_width - 1 : 0], indata, inbuffer_data[interface_data_width - internal_data_width - 1 : 0]}),
+    .data_wr    (data_wr),
     .clk_rd     (usrclk2),
     .val_rd     (val_rd),
     .data_rd    (resync),

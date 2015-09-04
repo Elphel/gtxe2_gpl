@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Module: GTXE2_CHANNEL
- * Date: 2015-08-24
+ * Date: 2015-09-03
  * Author: Alexey     
  * Description: emulates GTXE2_CHANNEL primitive behaviour. 
  *              The file is gathered from multiple files
@@ -562,6 +562,7 @@ module gtxe2_chnl_tx_ser #(
 )
 (
     input   wire                    reset,
+    input   wire                    trim,
     input   wire                    inclk,
     input   wire                    outclk,
     input   wire    [width - 1:0]   indata,
@@ -570,18 +571,23 @@ module gtxe2_chnl_tx_ser #(
     output  wire                    idle_out
 );
 
+localparam trimmed_width = width * 4 / 5;
+
 reg     [31:0]          bitcounter;
 wire    [width - 1:0]   data_resynced;
 wire                    almost_empty_rd;
 wire                    empty_rd;
 wire                    full_wr;
 wire                    val_rd;
+wire                    bitcounter_limit;
+
+assign  bitcounter_limit = trim ? bitcounter == (trimmed_width - 1) : bitcounter == (width - 1);
 
 always @ (posedge outclk)
-    bitcounter  <= reset | bitcounter == (width - 1) ? 32'h0 : bitcounter + 1'b1;
+    bitcounter  <= reset | bitcounter_limit ? 32'h0 : bitcounter + 1'b1;
  
 assign  outdata = data_resynced[bitcounter];
-assign  val_rd  = ~almost_empty_rd & ~empty_rd & bitcounter == (width - 1);
+assign  val_rd  = ~almost_empty_rd & ~empty_rd & bitcounter_limit;
 
 resync_fifo_nonsynt #(
     .width      (width + 1), // +1 is for a flag of an idle line (both TXP and TXN = 0)
@@ -609,19 +615,26 @@ endmodule
 // for some reason overall trasmitted disparity is tracked at the top level
 module gtxe2_chnl_tx_8x10enc #(
     parameter iwidth = 16,
+    parameter iskwidth = 2,
     parameter owidth = 20
 )
 (
-    input   wire    [7:0]           TX8B10BBYPASS,
-    input   wire                    TX8B10BEN,
-    input   wire    [7:0]           TXCHARDISPMODE,
-    input   wire    [7:0]           TXCHARDISPVAL,
-    input   wire    [7:0]           TXCHARISK,
-    input   wire                    disparity,
-    input   wire    [iwidth - 1:0]  data_in,
-    output  wire    [owidth - 1:0]  data_out,
-    output  wire                    next_disparity
+    input   wire    [iskwidth - 1:0]    TX8B10BBYPASS,
+    input   wire                        TX8B10BEN,
+    input   wire    [iskwidth - 1:0]    TXCHARDISPMODE,
+    input   wire    [iskwidth - 1:0]    TXCHARDISPVAL,
+    input   wire    [iskwidth - 1:0]    TXCHARISK,
+    input   wire                        disparity,
+    input   wire    [iwidth - 1:0]      data_in,
+    output  wire    [owidth - 1:0]      data_out,
+    output  wire                        next_disparity
 );
+
+wire    [owidth - 1:0]  enc_data_out;
+wire    [owidth - 1:0]  bp_data_out;
+
+assign  data_out = TX8B10BEN ? enc_data_out : bp_data_out;
+
 
 // only full 8/10 encoding and width=20 case is implemented
 
@@ -702,7 +715,10 @@ begin: encode_by_word
                                         : iword[ii][7:0] == 8'b11111101 ? (~word_disparity[ii] ? 10'b1011101000 : 10'b0100010111)
                                         :/*iword[ii][7:0] == 8'b11111110*/(~word_disparity[ii] ? 10'b0111101000 : 10'b1000010111);
 
-    assign  data_out[ii*10 + 9:ii * 10] = oword[ii];
+    assign  enc_data_out[ii*10 + 9:ii * 10] = oword[ii];
+
+    // case of a disabled encoder
+    assign  bp_data_out[ii*10 + 9:ii*10] = {TXCHARDISPMODE[ii], TXCHARDISPVAL[ii], data_in[ii*8 + 7:ii*8]};
 end
 endgenerate
 assign  next_disparity = ^oword[word_count - 1] ? word_disparity[word_count - 1] : ~word_disparity[word_count - 1];
@@ -910,7 +926,6 @@ module gtxe2_chnl_tx(
 );
 parameter   TX_DATA_WIDTH       = 20;
 parameter   TX_INT_DATAWIDTH    = 0;
-parameter   PTX8B10BEN           = 1;
 
 parameter   [3:0]   SATA_BURST_SEQ_LEN = 4'b1111;
 parameter           SATA_CPLL_CFG = "VCO_3000MHZ";
@@ -920,9 +935,9 @@ function integer calc_idw;
 //    input   TX_INT_DATAWIDTH;
 //    input   TX_DATA_WIDTH;
     begin
-    if (TX8B10BEN == 1)
+//    if (TX8B10BEN == 1)
         calc_idw = TX_INT_DATAWIDTH == 1 ? 40 : 20;
-    else
+/*    else
     begin
         if (TX_INT_DATAWIDTH == 1)
             calc_idw    = TX_DATA_WIDTH == 32 ? 32
@@ -932,12 +947,38 @@ function integer calc_idw;
             calc_idw    = TX_DATA_WIDTH == 16 ? 16  
                         : TX_DATA_WIDTH == 20 ? 20 
                         : TX_DATA_WIDTH == 32 ? 16 : 20;
-    end
+    end*/
     end
 endfunction
 
-localparam  internal_data_width = calc_idw(PTX8B10BEN);//, TX_INT_DATAWIDTH, TX_DATA_WIDTH);
+function integer calc_ifdw;
+    input   TX8B10BEN;
+    begin
+//    if (TX8B10BEN == 1)
+       calc_ifdw = TX_DATA_WIDTH == 16 ? 20 :
+                   TX_DATA_WIDTH == 32 ? 40 :
+                   TX_DATA_WIDTH == 64 ? 80 : TX_DATA_WIDTH;
+/*    else
+    begin
+        if (TX_INT_DATAWIDTH == 1)
+            calc_ifdw    = TX_DATA_WIDTH == 32 ? 32
+                         : TX_DATA_WIDTH == 40 ? 40
+                         : TX_DATA_WIDTH == 64 ? 64 : 80;
+        else
+            calc_ifdw    = TX_DATA_WIDTH == 16 ? 16  
+                         : TX_DATA_WIDTH == 20 ? 20 
+                         : TX_DATA_WIDTH == 32 ? 16 : 20;
+    end*/
+    end
+endfunction
 
+// can be 20 or 40, if it shall be 16 or 32, extra bits wont be used
+localparam  internal_data_width     = calc_idw(1);//PTX8B10BEN);//, TX_INT_DATAWIDTH, TX_DATA_WIDTH);
+localparam  interface_data_width    = calc_ifdw(1);
+localparam  internal_isk_width      = internal_data_width / 10;
+localparam  interface_isk_width     = interface_data_width / 10;
+// used in case of TX8B10BEN = 0
+localparam  data_width_odd          = TX_DATA_WIDTH == 16 | TX_DATA_WIDTH == 32 | TX_DATA_WIDTH == 64;
 // TX PMA
 
 // serializer
@@ -965,6 +1006,7 @@ gtxe2_chnl_tx_ser #(
 )
 ser(
     .reset      (reset),
+    .trim       (data_width_odd & ~TX8B10BEN),
     .inclk      (TXUSRCLK),
     .outclk     (serial_clk),
     .indata     (inv_parallel_data),
@@ -976,31 +1018,49 @@ ser(
 // TX PCS
 
 // fit data width
-// TODO make parameters awesome
-localparam data_width = 16;
-localparam if_data_width = 32;
-localparam isk_width = 2;
-localparam if_isk_width = 4;
+localparam  iface_databus_width = interface_data_width * 8 / 10;
+localparam  intern_databus_width = internal_data_width * 8 / 10;
 
-wire [data_width - 1:0] internal_data;
-wire [isk_width  - 1:0] internal_isk;
+wire [intern_databus_width - 1:0]   internal_data;
+wire [internal_isk_width  - 1:0]    internal_isk;
+wire [internal_isk_width  - 1:0]    internal_dispval;
+wire [internal_isk_width  - 1:0]    internal_dispmode;
+wire [internal_data_width - 1:0]    dataiface_data_out;
+wire [interface_data_width - 1:0]   dataiface_data_in;
+
+//assign  dataiface_data_in  = {TXCHARDISPMODE[interface_isk_width - 1:0], TXCHARDISPVAL[interface_isk_width - 1:0], TXDATA[iface_databus_width - 1:0]};
+localparam outdiv = interface_data_width / internal_data_width;
+generate
+for (ii = 1; ii < (outdiv + 1); ii = ii + 1)
+begin: asdadfdsf
+    assign  dataiface_data_in[ii*internal_data_width - 1-:internal_data_width]  = {TXCHARDISPMODE[ii*interface_isk_width - 1-:interface_isk_width],
+                                                                                   TXCHARDISPVAL[ii*interface_isk_width - 1-:interface_isk_width],
+                                                                                   TXDATA[ii*intern_databus_width - 1-:intern_databus_width]
+                                                                                  };
+end
+endgenerate
+
+assign  internal_dispmode  = dataiface_data_out[intern_databus_width + internal_isk_width + internal_isk_width - 1-:internal_isk_width];
+assign  internal_dispval   = dataiface_data_out[intern_databus_width + internal_isk_width - 1-:internal_isk_width];
+assign  internal_data      = dataiface_data_out[intern_databus_width - 1:0];
 
 gtxe2_chnl_tx_dataiface #(
-    .internal_data_width    (data_width),
-    .interface_data_width   (if_data_width),
-    .internal_isk_width     (isk_width),
-    .interface_isk_width    (if_isk_width)
+    .internal_data_width    (internal_data_width),
+    .interface_data_width   (interface_data_width),
+    .internal_isk_width     (internal_isk_width),
+    .interface_isk_width    (interface_isk_width)
 )
 dataiface
 (
     .usrclk     (TXUSRCLK),
     .usrclk2    (TXUSRCLK2),
     .reset      (reset),
-    .outdata    (internal_data),
+    .outdata    (dataiface_data_out),
     .outisk     (internal_isk),
-    .indata     (TXDATA[if_data_width - 1:0]),
-    .inisk      (TXCHARISK[if_isk_width - 1:0])
+    .indata     (dataiface_data_in),
+    .inisk      (TXCHARISK[interface_isk_width - 1:0])
 );
+
 
 wire    [internal_data_width - 1:0] polarized_data;
 
@@ -1012,7 +1072,7 @@ generate
     begin: select_each_word
         for (jj = 0; jj < 10; jj = jj + 1)
         begin: reverse_bits
-            assign inv_parallel_data[ii + jj] = polarized_data[ii + 9 - jj];
+            assign inv_parallel_data[ii + jj] = TX8B10BEN ? polarized_data[ii + 9 - jj] : polarized_data[ii + jj];
         end
     end
 endgenerate
@@ -1059,14 +1119,16 @@ always @ (posedge TXUSRCLK)
 // 8/10 endoding
 wire    [internal_data_width - 1:0] encoded_data;
 gtxe2_chnl_tx_8x10enc #(
-    .iwidth     (16),//TX_DATA_WIDTH),
+    .iwidth     (intern_databus_width),//TX_DATA_WIDTH),
+    .iskwidth   (internal_isk_width),
     .owidth     (internal_data_width)
+//    .oddwidth   (data_width_odd)
 )
 encoder_8x10(
-    .TX8B10BBYPASS      (TX8B10BBYPASS),
+    .TX8B10BBYPASS      (TX8B10BBYPASS[internal_isk_width - 1:0]),
     .TX8B10BEN          (TX8B10BEN),
-    .TXCHARDISPMODE     (TXCHARDISPMODE),
-    .TXCHARDISPVAL      (TXCHARDISPVAL),
+    .TXCHARDISPMODE     (internal_dispmode),
+    .TXCHARDISPVAL      (internal_dispval),
     .TXCHARISK          (internal_isk),
     .disparity          (disparity),
     .data_in            (internal_data),
@@ -1083,6 +1145,7 @@ endmodule
  /**
   * For now contains only deserializer, oob, 10x8 decoder, aligner and polarity invertor blocks
   **/
+// TODO resync all output signals
 // simplified resynchronisation fifo, could cause metastability
 // because of that shall not be syntesisable
 // TODO add shift registers and gray code to fix that
@@ -1150,11 +1213,14 @@ module gtxe2_chnl_rx_des #(
 )
 (
     input   wire                    reset,
+    input   wire                    trim,
     input   wire                    inclk,
     input   wire                    outclk,
     input   wire                    indata,
     output  wire    [width - 1:0]   outdata
 );
+
+localparam trimmed_width = width * 4 / 5;
 
 reg     [31:0]          bitcounter;
 reg     [width - 1:0]   inbuffer;
@@ -1162,16 +1228,22 @@ wire                    empty_rd;
 wire                    full_wr;
 wire                    val_wr;
 wire                    val_rd;
+wire                    bitcounter_limit;
+
+assign  bitcounter_limit = trim ? bitcounter == (trimmed_width - 1) : bitcounter == (width - 1);
 
 always @ (posedge inclk)
-    bitcounter  <= reset | bitcounter == (width - 1) ? 32'h0 : bitcounter + 1'b1;
+    bitcounter  <= reset | bitcounter_limit ? 32'h0 : bitcounter + 1'b1;
 
 genvar ii;
 generate
 for (ii = 0; ii < width; ii = ii + 1)
 begin: splicing
     always @ (posedge inclk)
-        inbuffer[ii] <= reset ? 1'b0 : (bitcounter == ii) ? indata : inbuffer[ii];
+        if ((ii >= trimmed_width) & trim)
+            inbuffer[ii] <= 1'bx;
+        else
+            inbuffer[ii] <= reset ? 1'b0 : (bitcounter == ii) ? indata : inbuffer[ii];
 end
 endgenerate
 
@@ -1322,10 +1394,10 @@ assign  set_error   = idle_len_violation | burst_len_violation;
 assign  set_done    = ~set_error & (done_wake | done_init);
 
 // just to rxcominit(wake)det be synchronous to usrclk2
-reg rxcominitdet_clk;
-reg rxcominitdet_usrclk2;
-reg rxcomwakedet_clk;
-reg rxcomwakedet_usrclk2;
+reg rxcominitdet_clk = 1'b0;
+reg rxcominitdet_usrclk2 = 1'b0;
+reg rxcomwakedet_clk = 1'b0;
+reg rxcomwakedet_usrclk2 = 1'b0;
 always @ (posedge clk)
 begin
     rxcominitdet_clk <= reset ? 1'b0 : done_init | rxcominitdet_clk & ~rxcominitdet_usrclk2;
@@ -1345,26 +1417,29 @@ endmodule
 // always enabled, wasnt tested with width parameters, disctinct from 20
 module gtxe2_chnl_rx_10x8dec #(
     parameter iwidth = 20,
+    parameter iskwidth = 2,
     parameter owidth = 20,
 
     parameter DEC_MCOMMA_DETECT = "TRUE",
     parameter DEC_PCOMMA_DETECT = "TRUE"
 )
 (
-    input   wire                    clk,
-    input   wire                    rst,
-    input   wire    [iwidth - 1:0]  indata,
-    input   wire                    RX8B10BEN,
+    input   wire                        clk,
+    input   wire                        rst,
+    input   wire    [iwidth - 1:0]      indata,
+    input   wire                        RX8B10BEN,
+    input   wire                        data_width_odd,
 
-    output  wire    [7:0]           RXCHARISCOMMA,
-    output  wire    [7:0]           RXCHARISK,
-    output  wire    [7:0]           RXDISPERR,
-    output  wire    [7:0]           RXNOTINTABLE,
+    output  wire    [iskwidth - 1:0]    rxchariscomma,
+    output  wire    [iskwidth - 1:0]    rxcharisk,
+    output  wire    [iskwidth - 1:0]    rxdisperr,
+    output  wire    [iskwidth - 1:0]    rxnotintable,
 
-    output  wire    [owidth - 1:0]  outdata,
-    output  wire    [63:0]          RXDATA
+    output  wire    [owidth - 1:0]      outdata
 );
-
+wire    [iskwidth - 1:0]    rxcharisk_dec;
+wire    [iskwidth - 1:0]    rxdisperr_dec;
+wire    [owidth - 1:0]      outdata_dec;
 
 localparam word_count = iwidth / 10;
 localparam add_2out_bits = owidth == 20 | owidth == 40 | owidth == 80 ? "TRUE" : "FALSE";
@@ -1387,7 +1462,7 @@ begin: asdf
     //data = {1'(is in table) + 3'(decoded 4/3) + 1'(is in table) + 5'(decoded 6/5)}
 
     //6/5 decoding
-    assign  data[ii*10+5:ii*10] = RXCHARISK[ii] ? (
+    assign  data[ii*10+5:ii*10] = rxcharisk_dec[ii] ? (
                                   indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 ? 6'b011100 :
                                   indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 ? 6'b011100 :
                                   indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 ? 6'b011100 :
@@ -1448,7 +1523,7 @@ begin: asdf
                                   indata[ii*10 + 5:ii*10] == 6'b011110 | indata[ii*10 + 5:ii*10] == 6'b100001 ? 6'b011110 :*/
                                                                                                                 6'b100000); // not in a table
     //4/3 decoding                                                                                                 
-    assign  data[ii*10+ 9:ii*10+ 6] = RXCHARISK[ii] ? (
+    assign  data[ii*10+ 9:ii*10+ 6] = rxcharisk_dec[ii] ? (
                                       indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 ? 4'b0000 :
                                       indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 ? 4'b0001 :
                                       indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 ? 4'b0010 :
@@ -1488,41 +1563,52 @@ begin: asdf
 
     assign  pure_data[ii*8 + 7:ii*8] = {data[ii*10 + 8:ii*10 + 6], data[ii*10 + 4:ii*10]};
 
-    if (add_2out_bits == "TRUE")
-        assign  outdata[ii*10 + 9:ii*10]= {RXDISPERR[ii], RXCHARISK[ii], pure_data[ii*8 + 7:ii*8]};
-    else
-        assign  outdata[ii*8 + 7:ii*8]  = pure_data[ii*8 + 7:ii*8];
+    assign  outdata_dec[ii*8 + 7:ii*8]  = pure_data[ii*8 + 7:ii*8];
+
+    assign  outdata[ii*8 + 7:ii*8]  = RX8B10BEN ? outdata_dec[ii*8 + 7:ii*8]   : ~data_width_odd ? indata[ii*10 + 7:ii*10]  : indata[ii*8 + 7:ii*8];
+    assign  rxcharisk[ii]           = RX8B10BEN ? rxcharisk_dec[ii] : ~data_width_odd ? indata[ii*10 + 8]        : 1'bx;
+    assign  rxdisperr[ii]           = RX8B10BEN ? rxdisperr_dec[ii] : ~data_width_odd ? indata[ii*10 + 9]        : 1'bx; 
+/*    if (RX8B10BEN) begin
+    end
+    else 
+    if (data_width_odd) begin
+        assign  outdata[ii*8 + 7:ii*8]  = indata[ii*8 + 7:ii*8];
+        assign  rxcharisk[ii]           = 1'bx;
+        assign  rxdisperr[ii]           = 1'bx; 
+    end
+    else begin
+        assign  outdata[ii*8 + 7:ii*8]  = indata[ii*10 + 7:ii*10];
+        assign  rxcharisk[ii]           = indata[ii*10 + 8];
+        assign  rxdisperr[ii]           = indata[ii*10 + 9];
+    end*/
 end
 endgenerate
 
-//disperr[ii] = no_disp_word[ii] ? 1'b0 : ~disp_word[ii] ^ disp[ii-1];
-//disp[ii] = no_disp_word[ii] ? disp[ii-1] : disp_word[ii]
 assign  disp_err = ~no_disp_word & (~disp_word ^ {disp[word_count - 2:0], disp_init});
 assign  disp     = ~no_disp_word & disp_word | no_disp_word & {disp[word_count - 2:0], disp_init};
 
 
 generate 
-for (ii = 0; ii < 8; ii = ii + 1)
+for (ii = 0; ii < word_count; ii = ii + 1)
 begin:dfsga
-    assign  RXDATA[ii*8+7:ii*8] = ii >= word_count ? 8'h0 : pure_data[ii*8+7:ii*8];
-    assign  RXNOTINTABLE[ii]    = ii >= word_count ? 1'b0 : data[ii*10 + 9] | data[ii*10 + 5];
+    assign  rxnotintable[ii]    = ii >= word_count ? 1'b0 : data[ii*10 + 9] | data[ii*10 + 5];
 
-    assign  RXDISPERR[ii]   = ii >= word_count ?  1'b0 : disp_err[ii];
-    assign  RXCHARISK[ii]   = ii >= word_count ?  1'b0 :
-                                                  indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b1100111100 | indata[ii*10 + 9:ii*10] == 10'b0011000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0100111100 | indata[ii*10 + 9:ii*10] == 10'b1011000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0101111100 | indata[ii*10 + 9:ii*10] == 10'b1010000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0110111100 | indata[ii*10 + 9:ii*10] == 10'b1001000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001111100 | indata[ii*10 + 9:ii*10] == 10'b1110000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001010111 | indata[ii*10 + 9:ii*10] == 10'b1110101000 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001011011 | indata[ii*10 + 9:ii*10] == 10'b1110100100 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001011101 | indata[ii*10 + 9:ii*10] == 10'b1110100010 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001011110 | indata[ii*10 + 9:ii*10] == 10'b1110100001;
+    assign  rxdisperr_dec[ii]   = ii >= word_count ?  1'b0 : disp_err[ii];
+    assign  rxcharisk_dec[ii]   = ii >= word_count ?  1'b0 :
+                                                      indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b1100111100 | indata[ii*10 + 9:ii*10] == 10'b0011000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0100111100 | indata[ii*10 + 9:ii*10] == 10'b1011000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0101111100 | indata[ii*10 + 9:ii*10] == 10'b1010000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0110111100 | indata[ii*10 + 9:ii*10] == 10'b1001000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001111100 | indata[ii*10 + 9:ii*10] == 10'b1110000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001010111 | indata[ii*10 + 9:ii*10] == 10'b1110101000 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001011011 | indata[ii*10 + 9:ii*10] == 10'b1110100100 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001011101 | indata[ii*10 + 9:ii*10] == 10'b1110100010 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001011110 | indata[ii*10 + 9:ii*10] == 10'b1110100001;
 
-    assign  RXCHARISCOMMA[ii] = ii >= word_count ?  1'b0 :
+    assign  rxchariscomma[ii] = ii >= word_count ?  1'b0 :
                                                    (indata[ii*10 + 9:ii*10] == 10'b1001111100 | 
                                                     indata[ii*10 + 9:ii*10] == 10'b0101111100 | 
                                                     indata[ii*10 + 9:ii*10] == 10'b0001111100) & DEC_PCOMMA_DETECT |
@@ -1748,6 +1834,14 @@ wire    [interface_total_width - 1:0] resync;
 assign  outdata = resync[interface_data_width - 1:0];
 assign  outisk  = resync[interface_data_width + interface_isk_width - 1:interface_data_width];
 
+wire [interface_total_width - 1:0] data_wr;
+generate
+if (interface_data_width > internal_data_width)
+    assign  data_wr = {inisk, inbuffer_isk[interface_isk_width - internal_isk_width - 1 : 0], indata, inbuffer_data[interface_data_width - internal_data_width - 1 : 0]};
+else
+    assign  data_wr = {inisk, indata};
+endgenerate
+
 resync_fifo_nonsynt #(
     .width      (interface_total_width),
     .log_depth  (3)
@@ -1755,9 +1849,9 @@ resync_fifo_nonsynt #(
 fifo(
     .rst_rd     (reset),
     .rst_wr     (reset),
-    .clk_wr     (usrclk2),
+    .clk_wr     (usrclk),
     .val_wr     (val_wr),
-    .data_wr    ({inisk, inbuffer_isk[interface_isk_width - internal_isk_width - 1 : 0], indata, inbuffer_data[interface_data_width - internal_data_width - 1 : 0]}),
+    .data_wr    (data_wr),
     .clk_rd     (usrclk2),
     .val_rd     (val_rd),
     .data_rd    (resync),
@@ -1814,7 +1908,6 @@ module gtxe2_chnl_rx(
 
 parameter   integer RX_DATA_WIDTH       = 20;
 parameter   integer RX_INT_DATAWIDTH    = 0;
-parameter   integer PRX8B10BEN           = 1;
 
 parameter   DEC_MCOMMA_DETECT = "TRUE";
 parameter   DEC_PCOMMA_DETECT = "TRUE";
@@ -1827,27 +1920,29 @@ parameter   [9:0]   ALIGN_COMMA_ENABLE  = 10'b1111111111;
 parameter           ALIGN_COMMA_DOUBLE  = "FALSE";
 
 function integer calc_idw;
-    input   RX8B10BEN;
-    input   RX_INT_DATAWIDTH;
-    input   RX_DATA_WIDTH;
+    input   dummy;
     begin
-        if (RX8B10BEN == 1)
-            calc_idw = RX_INT_DATAWIDTH == 1 ? 40 : 20;
-        else
-        begin
-            if (RX_INT_DATAWIDTH == 1)
-                calc_idw    = RX_DATA_WIDTH == 32 ? 32
-                            : RX_DATA_WIDTH == 40 ? 40
-                            : RX_DATA_WIDTH == 64 ? 32 : 40;
-            else
-                calc_idw    = RX_DATA_WIDTH == 16 ? 16  
-                            : RX_DATA_WIDTH == 20 ? 20 
-                            : RX_DATA_WIDTH == 32 ? 16 : 20;
-        end
+        calc_idw = RX_INT_DATAWIDTH == 1 ? 40 : 20;
     end
 endfunction
 
-localparam  internal_data_width = calc_idw(PRX8B10BEN, RX_INT_DATAWIDTH, RX_DATA_WIDTH);
+function integer calc_ifdw;
+    input   dummy;
+    begin
+       calc_ifdw = RX_DATA_WIDTH == 16 ? 20 :
+                   RX_DATA_WIDTH == 32 ? 40 :
+                   RX_DATA_WIDTH == 64 ? 80 : RX_DATA_WIDTH;
+    end
+endfunction
+
+// can be 20 or 40, if it shall be 16 or 32, extra bits wont be used
+localparam  internal_data_width     = calc_idw(1);
+localparam  interface_data_width    = calc_ifdw(1);
+localparam  internal_isk_width      = internal_data_width / 10;
+localparam  interface_isk_width     = interface_data_width / 10;
+// used in case of TX8B10BEN = 0
+localparam  data_width_odd          = RX_DATA_WIDTH == 16 | RX_DATA_WIDTH == 32 | RX_DATA_WIDTH == 64;
+
 
 // OOB
 gtxe2_chnl_rx_oob #(
@@ -1875,12 +1970,13 @@ assign  indata_ser = RXPOLARITY ^ RXP;
 // due to non-syntasisable usage, CDR is missing
 
 // deserializer
-wire    [internal_data_width - 1:0] parallel_data;
+wire    [internal_data_width - 1:0] parallel_data; // in trimmed case highest bites shall be 'x'
 gtxe2_chnl_rx_des #(
     .width      (internal_data_width)
 )
 des(
     .reset      (reset),
+    .trim       (data_width_odd & ~RX8B10BEN),
     .inclk      (serial_clk),
     .outclk     (RXUSRCLK),
     .indata     (indata_ser),
@@ -1915,12 +2011,19 @@ aligner(
     .RXMCOMMAALIGNEN    (RXMCOMMAALIGNEN)
 );
 
-wire [data_width - 1:0] internal_data;
-wire [isk_width  - 1:0] internal_isk;
+localparam  iface_databus_width = interface_data_width * 8 / 10;
+localparam  intern_databus_width = internal_data_width * 8 / 10;
+
+wire [intern_databus_width - 1:0] internal_data;
+wire [internal_isk_width  - 1:0]  internal_isk;
+wire [internal_isk_width  - 1:0]  internal_chariscomma;
+wire [internal_isk_width  - 1:0]  internal_notintable;
+wire [internal_isk_width  - 1:0]  internal_disperr;
 // 10x8 decoder
 gtxe2_chnl_rx_10x8dec #(
     .iwidth             (internal_data_width),
-    .owidth             (RX_DATA_WIDTH),
+    .iskwidth           (internal_isk_width),
+    .owidth             (intern_databus_width),
     .DEC_MCOMMA_DETECT  (DEC_MCOMMA_DETECT),
     .DEC_PCOMMA_DETECT  (DEC_PCOMMA_DETECT)
 )
@@ -1929,44 +2032,62 @@ decoder_10x8(
     .rst            (reset),
     .indata         (aligned_data),
     .RX8B10BEN      (RX8B10BEN),
+    .data_width_odd (data_width_odd),
 
-    .RXCHARISCOMMA  (RXCHARISCOMMA),
-    .RXCHARISK      (internal_isk),
-    .RXDISPERR      (RXDISPERR),
-    .RXNOTINTABLE   (RXNOTINTABLE),
+    .rxchariscomma  (internal_chariscomma),
+    .rxcharisk      (internal_isk),
+    .rxdisperr      (internal_disperr),
+    .rxnotintable   (internal_notintable),
 
-    .outdata        (),
-    .RXDATA         (internal_data)
+    .outdata        (internal_data)
 );
 
 // fit data width
-// TODO make parameters awesome
-localparam data_width = 16;
-localparam if_data_width = 32;
-localparam isk_width = 2;
-localparam if_isk_width = 4;
 
+localparam outdiv = interface_data_width / internal_data_width;
+// if something is written into dataiface_data_in _except_ internal_data and internal_isk => count all extra bits in this parameter
+localparam internal_data_extra = 4;
+localparam interface_data_extra = outdiv * internal_data_extra;
+
+wire [interface_data_width - 1 + interface_data_extra:0]  dataiface_data_out;
+wire [internal_data_width - 1 + internal_data_extra:0]   dataiface_data_in;
+
+assign  dataiface_data_in  = {internal_notintable, internal_chariscomma, internal_disperr, internal_isk, internal_data};
+
+genvar ii;
+generate
+for (ii = 1; ii < (outdiv + 1); ii = ii + 1)
+begin: asdadfdsf
+    assign  RXDATA[ii*intern_databus_width - 1 -: intern_databus_width]    = dataiface_data_out[(ii-1)*(internal_data_width + internal_data_extra) + intern_databus_width - 1 -: intern_databus_width];
+    assign  RXCHARISK[ii*internal_isk_width - 1 -: internal_isk_width]     = dataiface_data_out[(ii-1)*(internal_data_width + internal_data_extra) + intern_databus_width - 1 + internal_isk_width -: internal_isk_width];
+    assign  RXDISPERR[ii*internal_isk_width - 1 -: internal_isk_width]     = dataiface_data_out[(ii-1)*(internal_data_width + internal_data_extra) + intern_databus_width - 1 + internal_isk_width*2 -: internal_isk_width];
+    assign  RXCHARISCOMMA[ii*internal_isk_width - 1 -: internal_isk_width] = dataiface_data_out[(ii-1)*(internal_data_width + internal_data_extra) + intern_databus_width - 1 + internal_isk_width*3 -: internal_isk_width];
+    assign  RXNOTINTABLE[ii*internal_isk_width - 1 -: internal_isk_width]  = dataiface_data_out[(ii-1)*(internal_data_width + internal_data_extra) + intern_databus_width - 1 + internal_isk_width*4 -: internal_isk_width];
+end
+endgenerate
+assign  RXDATA[63:iface_databus_width]       = {64 - iface_databus_width{1'bx}};
+assign  RXDISPERR[7:interface_isk_width]     = {7 - interface_isk_width{1'bx}};
+assign  RXCHARISK[7:interface_isk_width]     = {7 - interface_isk_width{1'bx}};
+assign  RXCHARISCOMMA[7:interface_isk_width] = {7 - interface_isk_width{1'bx}};
+assign  RXNOTINTABLE[7:interface_isk_width]  = {7 - interface_isk_width{1'bx}};
 
 gtxe2_chnl_rx_dataiface #(
-    .internal_data_width    (data_width),
-    .interface_data_width   (if_data_width),
-    .internal_isk_width     (isk_width),
-    .interface_isk_width    (if_isk_width)
+    .internal_data_width    (internal_data_width + internal_data_extra),
+    .interface_data_width   (interface_data_width + interface_data_extra),
+    .internal_isk_width     (internal_isk_width),
+    .interface_isk_width    (interface_isk_width)
 )
 dataiface
 (
     .usrclk     (RXUSRCLK),
     .usrclk2    (RXUSRCLK2),
     .reset      (reset),
-    .indata     (internal_data),
-    .inisk      (internal_isk),
-    .outdata    (RXDATA[if_data_width - 1:0]),
-    .outisk     (RXCHARISK[if_isk_width - 1:0]),
+    .indata     (dataiface_data_in),
+    .inisk      (internal_isk), // not used actually
+    .outdata    (dataiface_data_out),
+    .outisk     (),
     .realign    (RXBYTEREALIGN === 1'bx ? 1'b0 : RXBYTEREALIGN)
 );
-
-assign  RXDATA[63:if_data_width]    = 0;
-assign  RXCHARISK[7:if_isk_width]   = 0;
 
 endmodule
 
@@ -2105,11 +2226,9 @@ parameter   RXOUT_DIV   = 2;
 
 parameter   integer TX_INT_DATAWIDTH    = 0;
 parameter   integer TX_DATA_WIDTH       = 20;
-parameter   integer PTX8B10BEN           = 1;
 
 parameter   integer RX_DATA_WIDTH       = 20;
 parameter   integer RX_INT_DATAWIDTH    = 0;
-parameter   integer PRX8B10BEN           = 1;
 
 parameter   DEC_MCOMMA_DETECT = "TRUE";
 parameter   DEC_PCOMMA_DETECT = "TRUE";
@@ -2128,7 +2247,6 @@ parameter           SATA_CPLL_CFG = "VCO_3000MHZ";
 gtxe2_chnl_tx #(
     .TX_DATA_WIDTH      (TX_DATA_WIDTH),
     .TX_INT_DATAWIDTH   (TX_INT_DATAWIDTH),
-    .PTX8B10BEN         (PTX8B10BEN),
     .SATA_BURST_SEQ_LEN (SATA_BURST_SEQ_LEN),
     .SATA_CPLL_CFG      (SATA_CPLL_CFG)
 )
@@ -2166,7 +2284,6 @@ tx(
 gtxe2_chnl_rx #(
     .RX_DATA_WIDTH          (RX_DATA_WIDTH),
     .RX_INT_DATAWIDTH       (RX_INT_DATAWIDTH),
-    .PRX8B10BEN             (PRX8B10BEN),
 
     .DEC_MCOMMA_DETECT      (DEC_MCOMMA_DETECT),
     .DEC_PCOMMA_DETECT      (DEC_PCOMMA_DETECT),
@@ -2861,7 +2978,6 @@ gtxe2_chnl #(
 
     .RX_DATA_WIDTH          (RX_DATA_WIDTH),
     .RX_INT_DATAWIDTH       (RX_INT_DATAWIDTH),
-    .PRX8B10BEN             (1),
 
     .DEC_MCOMMA_DETECT      (DEC_MCOMMA_DETECT),
     .DEC_PCOMMA_DETECT      (DEC_PCOMMA_DETECT),
@@ -2875,7 +2991,6 @@ gtxe2_chnl #(
 
     .TX_DATA_WIDTH          (TX_DATA_WIDTH),
     .TX_INT_DATAWIDTH       (TX_INT_DATAWIDTH),
-    .PTX8B10BEN             (1),
 
     .SATA_BURST_SEQ_LEN     (SATA_BURST_SEQ_LEN)
 )

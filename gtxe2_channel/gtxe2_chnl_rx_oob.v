@@ -132,10 +132,10 @@ assign  set_error   = idle_len_violation | burst_len_violation;
 assign  set_done    = ~set_error & (done_wake | done_init);
 
 // just to rxcominit(wake)det be synchronous to usrclk2
-reg rxcominitdet_clk;
-reg rxcominitdet_usrclk2;
-reg rxcomwakedet_clk;
-reg rxcomwakedet_usrclk2;
+reg rxcominitdet_clk = 1'b0;
+reg rxcominitdet_usrclk2 = 1'b0;
+reg rxcomwakedet_clk = 1'b0;
+reg rxcomwakedet_usrclk2 = 1'b0;
 always @ (posedge clk)
 begin
     rxcominitdet_clk <= reset ? 1'b0 : done_init | rxcominitdet_clk & ~rxcominitdet_usrclk2;

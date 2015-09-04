@@ -24,11 +24,14 @@ module gtxe2_chnl_rx_des #(
 )
 (
     input   wire                    reset,
+    input   wire                    trim,
     input   wire                    inclk,
     input   wire                    outclk,
     input   wire                    indata,
     output  wire    [width - 1:0]   outdata
 );
+
+localparam trimmed_width = width * 4 / 5;
 
 reg     [31:0]          bitcounter;
 reg     [width - 1:0]   inbuffer;
@@ -36,16 +39,22 @@ wire                    empty_rd;
 wire                    full_wr;
 wire                    val_wr;
 wire                    val_rd;
+wire                    bitcounter_limit;
+
+assign  bitcounter_limit = trim ? bitcounter == (trimmed_width - 1) : bitcounter == (width - 1);
 
 always @ (posedge inclk)
-    bitcounter  <= reset | bitcounter == (width - 1) ? 32'h0 : bitcounter + 1'b1;
+    bitcounter  <= reset | bitcounter_limit ? 32'h0 : bitcounter + 1'b1;
 
 genvar ii;
 generate
 for (ii = 0; ii < width; ii = ii + 1)
 begin: splicing
     always @ (posedge inclk)
-        inbuffer[ii] <= reset ? 1'b0 : (bitcounter == ii) ? indata : inbuffer[ii];
+        if ((ii >= trimmed_width) & trim)
+            inbuffer[ii] <= 1'bx;
+        else
+            inbuffer[ii] <= reset ? 1'b0 : (bitcounter == ii) ? indata : inbuffer[ii];
 end
 endgenerate
 

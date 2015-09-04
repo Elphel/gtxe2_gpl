@@ -21,26 +21,29 @@
 // always enabled, wasnt tested with width parameters, disctinct from 20
 module gtxe2_chnl_rx_10x8dec #(
     parameter iwidth = 20,
+    parameter iskwidth = 2,
     parameter owidth = 20,
 
     parameter DEC_MCOMMA_DETECT = "TRUE",
     parameter DEC_PCOMMA_DETECT = "TRUE"
 )
 (
-    input   wire                    clk,
-    input   wire                    rst,
-    input   wire    [iwidth - 1:0]  indata,
-    input   wire                    RX8B10BEN,
+    input   wire                        clk,
+    input   wire                        rst,
+    input   wire    [iwidth - 1:0]      indata,
+    input   wire                        RX8B10BEN,
+    input   wire                        data_width_odd,
 
-    output  wire    [7:0]           RXCHARISCOMMA,
-    output  wire    [7:0]           RXCHARISK,
-    output  wire    [7:0]           RXDISPERR,
-    output  wire    [7:0]           RXNOTINTABLE,
+    output  wire    [iskwidth - 1:0]    rxchariscomma,
+    output  wire    [iskwidth - 1:0]    rxcharisk,
+    output  wire    [iskwidth - 1:0]    rxdisperr,
+    output  wire    [iskwidth - 1:0]    rxnotintable,
 
-    output  wire    [owidth - 1:0]  outdata,
-    output  wire    [63:0]          RXDATA
+    output  wire    [owidth - 1:0]      outdata
 );
-
+wire    [iskwidth - 1:0]    rxcharisk_dec;
+wire    [iskwidth - 1:0]    rxdisperr_dec;
+wire    [owidth - 1:0]      outdata_dec;
 
 localparam word_count = iwidth / 10;
 localparam add_2out_bits = owidth == 20 | owidth == 40 | owidth == 80 ? "TRUE" : "FALSE";
@@ -63,7 +66,7 @@ begin: asdf
     //data = {1'(is in table) + 3'(decoded 4/3) + 1'(is in table) + 5'(decoded 6/5)}
 
     //6/5 decoding
-    assign  data[ii*10+5:ii*10] = RXCHARISK[ii] ? (
+    assign  data[ii*10+5:ii*10] = rxcharisk_dec[ii] ? (
                                   indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 ? 6'b011100 :
                                   indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 ? 6'b011100 :
                                   indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 ? 6'b011100 :
@@ -124,7 +127,7 @@ begin: asdf
                                   indata[ii*10 + 5:ii*10] == 6'b011110 | indata[ii*10 + 5:ii*10] == 6'b100001 ? 6'b011110 :*/
                                                                                                                 6'b100000); // not in a table
     //4/3 decoding                                                                                                 
-    assign  data[ii*10+ 9:ii*10+ 6] = RXCHARISK[ii] ? (
+    assign  data[ii*10+ 9:ii*10+ 6] = rxcharisk_dec[ii] ? (
                                       indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 ? 4'b0000 :
                                       indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 ? 4'b0001 :
                                       indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 ? 4'b0010 :
@@ -164,41 +167,52 @@ begin: asdf
 
     assign  pure_data[ii*8 + 7:ii*8] = {data[ii*10 + 8:ii*10 + 6], data[ii*10 + 4:ii*10]};
 
-    if (add_2out_bits == "TRUE")
-        assign  outdata[ii*10 + 9:ii*10]= {RXDISPERR[ii], RXCHARISK[ii], pure_data[ii*8 + 7:ii*8]};
-    else
-        assign  outdata[ii*8 + 7:ii*8]  = pure_data[ii*8 + 7:ii*8];
+    assign  outdata_dec[ii*8 + 7:ii*8]  = pure_data[ii*8 + 7:ii*8];
+
+    assign  outdata[ii*8 + 7:ii*8]  = RX8B10BEN ? outdata_dec[ii*8 + 7:ii*8]   : ~data_width_odd ? indata[ii*10 + 7:ii*10]  : indata[ii*8 + 7:ii*8];
+    assign  rxcharisk[ii]           = RX8B10BEN ? rxcharisk_dec[ii] : ~data_width_odd ? indata[ii*10 + 8]        : 1'bx;
+    assign  rxdisperr[ii]           = RX8B10BEN ? rxdisperr_dec[ii] : ~data_width_odd ? indata[ii*10 + 9]        : 1'bx; 
+/*    if (RX8B10BEN) begin
+    end
+    else 
+    if (data_width_odd) begin
+        assign  outdata[ii*8 + 7:ii*8]  = indata[ii*8 + 7:ii*8];
+        assign  rxcharisk[ii]           = 1'bx;
+        assign  rxdisperr[ii]           = 1'bx; 
+    end
+    else begin
+        assign  outdata[ii*8 + 7:ii*8]  = indata[ii*10 + 7:ii*10];
+        assign  rxcharisk[ii]           = indata[ii*10 + 8];
+        assign  rxdisperr[ii]           = indata[ii*10 + 9];
+    end*/
 end
 endgenerate
 
-//disperr[ii] = no_disp_word[ii] ? 1'b0 : ~disp_word[ii] ^ disp[ii-1];
-//disp[ii] = no_disp_word[ii] ? disp[ii-1] : disp_word[ii]
 assign  disp_err = ~no_disp_word & (~disp_word ^ {disp[word_count - 2:0], disp_init});
 assign  disp     = ~no_disp_word & disp_word | no_disp_word & {disp[word_count - 2:0], disp_init};
 
 
 generate 
-for (ii = 0; ii < 8; ii = ii + 1)
+for (ii = 0; ii < word_count; ii = ii + 1)
 begin:dfsga
-    assign  RXDATA[ii*8+7:ii*8] = ii >= word_count ? 8'h0 : pure_data[ii*8+7:ii*8];
-    assign  RXNOTINTABLE[ii]    = ii >= word_count ? 1'b0 : data[ii*10 + 9] | data[ii*10 + 5];
+    assign  rxnotintable[ii]    = ii >= word_count ? 1'b0 : data[ii*10 + 9] | data[ii*10 + 5];
 
-    assign  RXDISPERR[ii]   = ii >= word_count ?  1'b0 : disp_err[ii];
-    assign  RXCHARISK[ii]   = ii >= word_count ?  1'b0 :
-                                                  indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b1100111100 | indata[ii*10 + 9:ii*10] == 10'b0011000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0100111100 | indata[ii*10 + 9:ii*10] == 10'b1011000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0101111100 | indata[ii*10 + 9:ii*10] == 10'b1010000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0110111100 | indata[ii*10 + 9:ii*10] == 10'b1001000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001111100 | indata[ii*10 + 9:ii*10] == 10'b1110000011 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001010111 | indata[ii*10 + 9:ii*10] == 10'b1110101000 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001011011 | indata[ii*10 + 9:ii*10] == 10'b1110100100 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001011101 | indata[ii*10 + 9:ii*10] == 10'b1110100010 |
-                                                  indata[ii*10 + 9:ii*10] == 10'b0001011110 | indata[ii*10 + 9:ii*10] == 10'b1110100001;
+    assign  rxdisperr_dec[ii]   = ii >= word_count ?  1'b0 : disp_err[ii];
+    assign  rxcharisk_dec[ii]   = ii >= word_count ?  1'b0 :
+                                                      indata[ii*10 + 9:ii*10] == 10'b0010111100 | indata[ii*10 + 9:ii*10] == 10'b1101000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b1001111100 | indata[ii*10 + 9:ii*10] == 10'b0110000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b1010111100 | indata[ii*10 + 9:ii*10] == 10'b0101000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b1100111100 | indata[ii*10 + 9:ii*10] == 10'b0011000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0100111100 | indata[ii*10 + 9:ii*10] == 10'b1011000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0101111100 | indata[ii*10 + 9:ii*10] == 10'b1010000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0110111100 | indata[ii*10 + 9:ii*10] == 10'b1001000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001111100 | indata[ii*10 + 9:ii*10] == 10'b1110000011 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001010111 | indata[ii*10 + 9:ii*10] == 10'b1110101000 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001011011 | indata[ii*10 + 9:ii*10] == 10'b1110100100 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001011101 | indata[ii*10 + 9:ii*10] == 10'b1110100010 |
+                                                      indata[ii*10 + 9:ii*10] == 10'b0001011110 | indata[ii*10 + 9:ii*10] == 10'b1110100001;
 
-    assign  RXCHARISCOMMA[ii] = ii >= word_count ?  1'b0 :
+    assign  rxchariscomma[ii] = ii >= word_count ?  1'b0 :
                                                    (indata[ii*10 + 9:ii*10] == 10'b1001111100 | 
                                                     indata[ii*10 + 9:ii*10] == 10'b0101111100 | 
                                                     indata[ii*10 + 9:ii*10] == 10'b0001111100) & DEC_PCOMMA_DETECT |

@@ -21,19 +21,26 @@
 // for some reason overall trasmitted disparity is tracked at the top level
 module gtxe2_chnl_tx_8x10enc #(
     parameter iwidth = 16,
+    parameter iskwidth = 2,
     parameter owidth = 20
 )
 (
-    input   wire    [7:0]           TX8B10BBYPASS,
-    input   wire                    TX8B10BEN,
-    input   wire    [7:0]           TXCHARDISPMODE,
-    input   wire    [7:0]           TXCHARDISPVAL,
-    input   wire    [7:0]           TXCHARISK,
-    input   wire                    disparity,
-    input   wire    [iwidth - 1:0]  data_in,
-    output  wire    [owidth - 1:0]  data_out,
-    output  wire                    next_disparity
+    input   wire    [iskwidth - 1:0]    TX8B10BBYPASS,
+    input   wire                        TX8B10BEN,
+    input   wire    [iskwidth - 1:0]    TXCHARDISPMODE,
+    input   wire    [iskwidth - 1:0]    TXCHARDISPVAL,
+    input   wire    [iskwidth - 1:0]    TXCHARISK,
+    input   wire                        disparity,
+    input   wire    [iwidth - 1:0]      data_in,
+    output  wire    [owidth - 1:0]      data_out,
+    output  wire                        next_disparity
 );
+
+wire    [owidth - 1:0]  enc_data_out;
+wire    [owidth - 1:0]  bp_data_out;
+
+assign  data_out = TX8B10BEN ? enc_data_out : bp_data_out;
+
 
 // only full 8/10 encoding and width=20 case is implemented
 
@@ -114,7 +121,10 @@ begin: encode_by_word
                                         : iword[ii][7:0] == 8'b11111101 ? (~word_disparity[ii] ? 10'b1011101000 : 10'b0100010111)
                                         :/*iword[ii][7:0] == 8'b11111110*/(~word_disparity[ii] ? 10'b0111101000 : 10'b1000010111);
 
-    assign  data_out[ii*10 + 9:ii * 10] = oword[ii];
+    assign  enc_data_out[ii*10 + 9:ii * 10] = oword[ii];
+
+    // case of a disabled encoder
+    assign  bp_data_out[ii*10 + 9:ii*10] = {TXCHARDISPMODE[ii], TXCHARDISPVAL[ii], data_in[ii*8 + 7:ii*8]};
 end
 endgenerate
 assign  next_disparity = ^oword[word_count - 1] ? word_disparity[word_count - 1] : ~word_disparity[word_count - 1];

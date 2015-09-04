@@ -156,11 +156,9 @@ parameter   RXOUT_DIV   = 2;
 
 parameter   integer TX_INT_DATAWIDTH    = 0;
 parameter   integer TX_DATA_WIDTH       = 20;
-parameter   integer PTX8B10BEN           = 1;
 
 parameter   integer RX_DATA_WIDTH       = 20;
 parameter   integer RX_INT_DATAWIDTH    = 0;
-parameter   integer PRX8B10BEN           = 1;
 
 parameter   DEC_MCOMMA_DETECT = "TRUE";
 parameter   DEC_PCOMMA_DETECT = "TRUE";
@@ -179,7 +177,6 @@ parameter           SATA_CPLL_CFG = "VCO_3000MHZ";
 gtxe2_chnl_tx #(
     .TX_DATA_WIDTH      (TX_DATA_WIDTH),
     .TX_INT_DATAWIDTH   (TX_INT_DATAWIDTH),
-    .PTX8B10BEN         (PTX8B10BEN),
     .SATA_BURST_SEQ_LEN (SATA_BURST_SEQ_LEN),
     .SATA_CPLL_CFG      (SATA_CPLL_CFG)
 )
@@ -217,7 +214,6 @@ tx(
 gtxe2_chnl_rx #(
     .RX_DATA_WIDTH          (RX_DATA_WIDTH),
     .RX_INT_DATAWIDTH       (RX_INT_DATAWIDTH),
-    .PRX8B10BEN             (PRX8B10BEN),
 
     .DEC_MCOMMA_DETECT      (DEC_MCOMMA_DETECT),
     .DEC_PCOMMA_DETECT      (DEC_PCOMMA_DETECT),

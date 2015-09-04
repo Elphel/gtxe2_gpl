@@ -62,7 +62,6 @@ module gtxe2_chnl_tx(
 );
 parameter   TX_DATA_WIDTH       = 20;
 parameter   TX_INT_DATAWIDTH    = 0;
-parameter   PTX8B10BEN           = 1;
 
 parameter   [3:0]   SATA_BURST_SEQ_LEN = 4'b1111;
 parameter           SATA_CPLL_CFG = "VCO_3000MHZ";
@@ -72,9 +71,9 @@ function integer calc_idw;
 //    input   TX_INT_DATAWIDTH;
 //    input   TX_DATA_WIDTH;
     begin
-    if (TX8B10BEN == 1)
+//    if (TX8B10BEN == 1)
         calc_idw = TX_INT_DATAWIDTH == 1 ? 40 : 20;
-    else
+/*    else
     begin
         if (TX_INT_DATAWIDTH == 1)
             calc_idw    = TX_DATA_WIDTH == 32 ? 32
@@ -84,12 +83,38 @@ function integer calc_idw;
             calc_idw    = TX_DATA_WIDTH == 16 ? 16  
                         : TX_DATA_WIDTH == 20 ? 20 
                         : TX_DATA_WIDTH == 32 ? 16 : 20;
-    end
+    end*/
     end
 endfunction
 
-localparam  internal_data_width = calc_idw(PTX8B10BEN);//, TX_INT_DATAWIDTH, TX_DATA_WIDTH);
+function integer calc_ifdw;
+    input   TX8B10BEN;
+    begin
+//    if (TX8B10BEN == 1)
+       calc_ifdw = TX_DATA_WIDTH == 16 ? 20 :
+                   TX_DATA_WIDTH == 32 ? 40 :
+                   TX_DATA_WIDTH == 64 ? 80 : TX_DATA_WIDTH;
+/*    else
+    begin
+        if (TX_INT_DATAWIDTH == 1)
+            calc_ifdw    = TX_DATA_WIDTH == 32 ? 32
+                         : TX_DATA_WIDTH == 40 ? 40
+                         : TX_DATA_WIDTH == 64 ? 64 : 80;
+        else
+            calc_ifdw    = TX_DATA_WIDTH == 16 ? 16  
+                         : TX_DATA_WIDTH == 20 ? 20 
+                         : TX_DATA_WIDTH == 32 ? 16 : 20;
+    end*/
+    end
+endfunction
 
+// can be 20 or 40, if it shall be 16 or 32, extra bits wont be used
+localparam  internal_data_width     = calc_idw(1);//PTX8B10BEN);//, TX_INT_DATAWIDTH, TX_DATA_WIDTH);
+localparam  interface_data_width    = calc_ifdw(1);
+localparam  internal_isk_width      = internal_data_width / 10;
+localparam  interface_isk_width     = interface_data_width / 10;
+// used in case of TX8B10BEN = 0
+localparam  data_width_odd          = TX_DATA_WIDTH == 16 | TX_DATA_WIDTH == 32 | TX_DATA_WIDTH == 64;
 // TX PMA
 
 // serializer
@@ -117,6 +142,7 @@ gtxe2_chnl_tx_ser #(
 )
 ser(
     .reset      (reset),
+    .trim       (data_width_odd & ~TX8B10BEN),
     .inclk      (TXUSRCLK),
     .outclk     (serial_clk),
     .indata     (inv_parallel_data),
@@ -128,31 +154,49 @@ ser(
 // TX PCS
 
 // fit data width
-// TODO make parameters awesome
-localparam data_width = 16;
-localparam if_data_width = 32;
-localparam isk_width = 2;
-localparam if_isk_width = 4;
+localparam  iface_databus_width = interface_data_width * 8 / 10;
+localparam  intern_databus_width = internal_data_width * 8 / 10;
 
-wire [data_width - 1:0] internal_data;
-wire [isk_width  - 1:0] internal_isk;
+wire [intern_databus_width - 1:0]   internal_data;
+wire [internal_isk_width  - 1:0]    internal_isk;
+wire [internal_isk_width  - 1:0]    internal_dispval;
+wire [internal_isk_width  - 1:0]    internal_dispmode;
+wire [internal_data_width - 1:0]    dataiface_data_out;
+wire [interface_data_width - 1:0]   dataiface_data_in;
+
+//assign  dataiface_data_in  = {TXCHARDISPMODE[interface_isk_width - 1:0], TXCHARDISPVAL[interface_isk_width - 1:0], TXDATA[iface_databus_width - 1:0]};
+localparam outdiv = interface_data_width / internal_data_width;
+generate
+for (ii = 1; ii < (outdiv + 1); ii = ii + 1)
+begin: asdadfdsf
+    assign  dataiface_data_in[ii*internal_data_width - 1-:internal_data_width]  = {TXCHARDISPMODE[ii*interface_isk_width - 1-:interface_isk_width],
+                                                                                   TXCHARDISPVAL[ii*interface_isk_width - 1-:interface_isk_width],
+                                                                                   TXDATA[ii*intern_databus_width - 1-:intern_databus_width]
+                                                                                  };
+end
+endgenerate
+
+assign  internal_dispmode  = dataiface_data_out[intern_databus_width + internal_isk_width + internal_isk_width - 1-:internal_isk_width];
+assign  internal_dispval   = dataiface_data_out[intern_databus_width + internal_isk_width - 1-:internal_isk_width];
+assign  internal_data      = dataiface_data_out[intern_databus_width - 1:0];
 
 gtxe2_chnl_tx_dataiface #(
-    .internal_data_width    (data_width),
-    .interface_data_width   (if_data_width),
-    .internal_isk_width     (isk_width),
-    .interface_isk_width    (if_isk_width)
+    .internal_data_width    (internal_data_width),
+    .interface_data_width   (interface_data_width),
+    .internal_isk_width     (internal_isk_width),
+    .interface_isk_width    (interface_isk_width)
 )
 dataiface
 (
     .usrclk     (TXUSRCLK),
     .usrclk2    (TXUSRCLK2),
     .reset      (reset),
-    .outdata    (internal_data),
+    .outdata    (dataiface_data_out),
     .outisk     (internal_isk),
-    .indata     (TXDATA[if_data_width - 1:0]),
-    .inisk      (TXCHARISK[if_isk_width - 1:0])
+    .indata     (dataiface_data_in),
+    .inisk      (TXCHARISK[interface_isk_width - 1:0])
 );
+
 
 wire    [internal_data_width - 1:0] polarized_data;
 
@@ -164,7 +208,7 @@ generate
     begin: select_each_word
         for (jj = 0; jj < 10; jj = jj + 1)
         begin: reverse_bits
-            assign inv_parallel_data[ii + jj] = polarized_data[ii + 9 - jj];
+            assign inv_parallel_data[ii + jj] = TX8B10BEN ? polarized_data[ii + 9 - jj] : polarized_data[ii + jj];
         end
     end
 endgenerate
@@ -211,14 +255,16 @@ always @ (posedge TXUSRCLK)
 // 8/10 endoding
 wire    [internal_data_width - 1:0] encoded_data;
 gtxe2_chnl_tx_8x10enc #(
-    .iwidth     (16),//TX_DATA_WIDTH),
+    .iwidth     (intern_databus_width),//TX_DATA_WIDTH),
+    .iskwidth   (internal_isk_width),
     .owidth     (internal_data_width)
+//    .oddwidth   (data_width_odd)
 )
 encoder_8x10(
-    .TX8B10BBYPASS      (TX8B10BBYPASS),
+    .TX8B10BBYPASS      (TX8B10BBYPASS[internal_isk_width - 1:0]),
     .TX8B10BEN          (TX8B10BEN),
-    .TXCHARDISPMODE     (TXCHARDISPMODE),
-    .TXCHARDISPVAL      (TXCHARDISPVAL),
+    .TXCHARDISPMODE     (internal_dispmode),
+    .TXCHARDISPVAL      (internal_dispval),
     .TXCHARISK          (internal_isk),
     .disparity          (disparity),
     .data_in            (internal_data),

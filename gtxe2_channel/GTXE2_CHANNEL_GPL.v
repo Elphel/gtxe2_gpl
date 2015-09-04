@@ -613,7 +613,6 @@ gtxe2_chnl #(
 
     .RX_DATA_WIDTH          (RX_DATA_WIDTH),
     .RX_INT_DATAWIDTH       (RX_INT_DATAWIDTH),
-    .PRX8B10BEN             (1),
 
     .DEC_MCOMMA_DETECT      (DEC_MCOMMA_DETECT),
     .DEC_PCOMMA_DETECT      (DEC_PCOMMA_DETECT),
@@ -627,7 +626,6 @@ gtxe2_chnl #(
 
     .TX_DATA_WIDTH          (TX_DATA_WIDTH),
     .TX_INT_DATAWIDTH       (TX_INT_DATAWIDTH),
-    .PTX8B10BEN             (1),
 
     .SATA_BURST_SEQ_LEN     (SATA_BURST_SEQ_LEN)
 )
