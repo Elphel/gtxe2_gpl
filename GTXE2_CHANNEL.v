@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Module: GTXE2_CHANNEL
- * Date: 2015-09-03
+ * Date: 2015-09-07
  * Author: Alexey     
  * Description: emulates GTXE2_CHANNEL primitive behaviour. 
  *              The file is gathered from multiple files
@@ -69,6 +69,7 @@ assign  TXOUTCLK    = TXOUTCLKSEL == 3'b001 ? TXOUTCLKPCS
                     : /* 3'b000 */            1'b1; 
 endmodule
 
+`timescale 1ps/1ps
 `define GTXE2_CHNL_CPLL_LOCK_TIME 60
 
 module gtxe2_chnl_cpll(

@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/> .
  *******************************************************************************/
+`timescale 1ps/1ps
 `include "gtxe2_chnl_cpll_def.v"
 module gtxe2_chnl_cpll(
 // top-level interfaces
