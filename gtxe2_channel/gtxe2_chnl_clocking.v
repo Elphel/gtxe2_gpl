@@ -67,7 +67,16 @@ module gtxe2_chnl_clocking(
     output  wire            RXOUTCLK,
     output  wire            RXOUTCLKFABRIC,
     output  wire            rx_serial_clk,
-    output  wire            tx_sipo_clk
+    output  wire            rx_sipo_clk,
+
+// additional ports to cpll
+    output              TSTOUT,
+    input   [15:0]      GTRSVD,
+    input   [15:0]      PCSRSVDIN,
+    input   [4:0]       PCSRSVDIN2,
+    input   [4:0]       PMARSVDIN,
+    input   [4:0]       PMARSVDIN2,
+    input   [19:0]      TSTIN
 );
 // CPLL
 parameter   [23:0]  CPLL_CFG        = 29'h00BC07DC;
@@ -148,7 +157,6 @@ tx_toserialclk_div(
 
     .div        (tx_serial_divider)
 );
-wire    rx_sipo_clk;
 clock_divider #(
 //    .divide_by  (rx_serial_divider),
     .divide_by_param (0)
@@ -168,6 +176,7 @@ clock_divider #(
     .divide_by (tx_pma_divider1)
 )
 tx_pma_div1(
+    .div        (1),
     .clk_in     (tx_piso_clk),
     .clk_out    (tx_pma_div1_clk)
 );
@@ -176,6 +185,7 @@ clock_divider #(
     .divide_by (tx_pma_divider2)
 )
 tx_pma_div2(
+    .div        (1),
     .clk_in     (tx_pma_div1_clk),
     .clk_out    (TXOUTCLKPMA)
 );
@@ -187,6 +197,7 @@ clock_divider #(
     .divide_by  (rx_pma_divider1)
 )
 rx_pma_div1(
+    .div        (1),
     .clk_in     (rx_sipo_clk),
     .clk_out    (rx_pma_div1_clk)
 );
@@ -195,6 +206,7 @@ clock_divider #(
     .divide_by  (rx_pma_divider2)
 )
 rx_pma_div2(
+    .div        (1),
     .clk_in     (rx_pma_div1_clk),
     .clk_out    (RXOUTCLKPMA)
 );
@@ -204,6 +216,7 @@ clock_divider #(
     .divide_by  (2)
 )
 txpllrefclk_div2(
+    .div        (1),
     .clk_in     (TXPLLREFCLK_DIV1),
     .clk_out    (TXPLLREFCLK_DIV2)
 );
@@ -211,6 +224,7 @@ clock_divider #(
     .divide_by  (2)
 )
 rxpllrefclk_div2(
+    .div        (1),
     .clk_in     (RXPLLREFCLK_DIV1),
     .clk_out    (RXPLLREFCLK_DIV2)
 );
@@ -274,7 +288,7 @@ cpll(
     
     .ref_clk            (clk_mux_out),
     .clk_out            (cpll_clk_out),
-    .pll_locked         (pll_locked)
+    .pll_locked         ()
 );
 
 endmodule

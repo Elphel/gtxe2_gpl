@@ -61,27 +61,6 @@ always @ (posedge clk)
 wire    [comma_width - 1:0] comma_window [window_size - 1:0];
 //initial
 //  for (idx = 0; idx < window_size; idx = idx + 1) $dumpvars(0, comma_width[idx]);
-wire    [comma_width - 1:0] comma_window0 = comma_window[0];
-wire    [comma_width - 1:0] comma_window1 = comma_window[1];
-wire    [comma_width - 1:0] comma_window2 = comma_window[2];
-wire    [comma_width - 1:0] comma_window3 = comma_window[3];
-wire    [comma_width - 1:0] comma_window4 = comma_window[4];
-wire    [comma_width - 1:0] comma_window5 = comma_window[5];
-wire    [comma_width - 1:0] comma_window6 = comma_window[6];
-wire    [comma_width - 1:0] comma_window7 = comma_window[7];
-wire    [comma_width - 1:0] comma_window8 = comma_window[8];
-wire    [comma_width - 1:0] comma_window9 = comma_window[9];
-wire    [comma_width - 1:0] comma_window10 = comma_window[10];
-wire    [comma_width - 1:0] comma_window11 = comma_window[11];
-wire    [comma_width - 1:0] comma_window12 = comma_window[12];
-wire    [comma_width - 1:0] comma_window13 = comma_window[13];
-wire    [comma_width - 1:0] comma_window14 = comma_window[14];
-wire    [comma_width - 1:0] comma_window15 = comma_window[15];
-wire    [comma_width - 1:0] comma_window16 = comma_window[16];
-wire    [comma_width - 1:0] comma_window17 = comma_window[17];
-wire    [comma_width - 1:0] comma_window18 = comma_window[18];
-wire    [comma_width - 1:0] comma_window19 = comma_window[19];
-
 wire    [window_size - 1:0] comma_match; // shows all matches
 wire    [window_size - 1:0] comma_pos; // shows the first match
 wire    [window_size - 1:0] pcomma_match;
@@ -159,7 +138,7 @@ assign  RXBYTEREALIGN = RXCOMMADETEN & is_aligned & pointer_set;
 always @ (posedge clk)
 begin
     is_aligned      <= rst | pointer_set === 1'bx | rxelecidle ? 1'b0 : ~is_aligned & pointer_set | is_aligned;
-    pointer_latched <= rst ? 1'b0 : pointer_set ? pointer : pointer_latched;
+    pointer_latched <= rst ? {pwidth{1'b0}} : pointer_set ? pointer : pointer_latched;
 end
 
 endmodule

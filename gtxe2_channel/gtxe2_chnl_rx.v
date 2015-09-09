@@ -229,10 +229,10 @@ begin: asdadfdsf
 end
 endgenerate
 assign  RXDATA[63:iface_databus_width]       = {64 - iface_databus_width{1'bx}};
-assign  RXDISPERR[7:interface_isk_width]     = {7 - interface_isk_width{1'bx}};
-assign  RXCHARISK[7:interface_isk_width]     = {7 - interface_isk_width{1'bx}};
-assign  RXCHARISCOMMA[7:interface_isk_width] = {7 - interface_isk_width{1'bx}};
-assign  RXNOTINTABLE[7:interface_isk_width]  = {7 - interface_isk_width{1'bx}};
+assign  RXDISPERR[7:interface_isk_width]     = {8 - interface_isk_width{1'bx}};
+assign  RXCHARISK[7:interface_isk_width]     = {8 - interface_isk_width{1'bx}};
+assign  RXCHARISCOMMA[7:interface_isk_width] = {8 - interface_isk_width{1'bx}};
+assign  RXNOTINTABLE[7:interface_isk_width]  = {8 - interface_isk_width{1'bx}};
 
 gtxe2_chnl_rx_dataiface #(
     .internal_data_width    (internal_data_width + internal_data_extra),

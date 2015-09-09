@@ -30,13 +30,13 @@ module gtxe2_chnl_cpll(
     output  wire    CPLLLOCK,
     output  wire    CPLLREFCLKLOST,
 
-    input   wire    GTRSVD,
-    input   wire    PCSRSVDIN,
-    input   wire    PCSRSVDIN2,
-    input   wire    PMARSVDIN,
-    input   wire    PMARSVDIN2,
-    input   wire    TSTIN,
-    output  wire    TSTOUT,
+    input   wire    [15:0]  GTRSVD,
+    input   wire    [15:0]  PCSRSVDIN,
+    input   wire    [4:0]   PCSRSVDIN2,
+    input   wire    [4:0]   PMARSVDIN,
+    input   wire    [4:0]   PMARSVDIN2,
+    input   wire    [19:0]  TSTIN,
+    output  wire            TSTOUT,
 
 // internal
     input   wire    ref_clk,

@@ -40,6 +40,7 @@ wire                    full_wr;
 wire                    val_wr;
 wire                    val_rd;
 wire                    bitcounter_limit;
+wire                    almost_empty_rd;
 
 assign  bitcounter_limit = trim ? bitcounter == (trimmed_width - 1) : bitcounter == (width - 1);
 

@@ -51,23 +51,24 @@ wire                    empty_rd;
 wire                    full_wr;
 wire                    val_wr;
 wire                    val_rd;
+wire                    almost_empty_rd;
 
 always @ (posedge usrclk)
-    wordcounter  <= reset ? 32'h0 : realign & ~(div == 0) ? 31'b1 : wordcounter == (div - 1) ? 32'h0 : wordcounter + 1'b1;
+    wordcounter  <= reset ? 32'h0 : realign & ~(div == 0) ? 32'd1 : wordcounter == (div - 1) ? 32'h0 : wordcounter + 1'b1;
 
 genvar ii;
 generate
 for (ii = 0; ii < div; ii = ii + 1)
 begin: splicing
     always @ (posedge usrclk)
-        inbuffer_data[(ii + 1) * internal_data_width - 1 -: internal_data_width] <= reset ? {interface_data_width{1'b0}} : ((wordcounter == ii) | realign & (0 == ii)) ? indata : inbuffer_data[(ii + 1) * internal_data_width - 1 -: internal_data_width];
+        inbuffer_data[(ii + 1) * internal_data_width - 1 -: internal_data_width] <= reset ? {internal_data_width{1'b0}} : ((wordcounter == ii) | realign & (0 == ii)) ? indata : inbuffer_data[(ii + 1) * internal_data_width - 1 -: internal_data_width];
 end
 endgenerate
 generate
 for (ii = 0; ii < div; ii = ii + 1)
 begin: splicing2
     always @ (posedge usrclk)
-        inbuffer_isk[(ii + 1) * internal_isk_width - 1 -: internal_isk_width] <= reset ? {interface_isk_width{1'b0}} : ((wordcounter == ii) | realign & (0 == ii)) ? inisk : inbuffer_isk[(ii + 1) * internal_isk_width - 1 -: internal_isk_width];
+        inbuffer_isk[(ii + 1) * internal_isk_width - 1 -: internal_isk_width] <= reset ? {internal_isk_width{1'b0}} : ((wordcounter == ii) | realign & (0 == ii)) ? inisk : inbuffer_isk[(ii + 1) * internal_isk_width - 1 -: internal_isk_width];
 end
 endgenerate
 

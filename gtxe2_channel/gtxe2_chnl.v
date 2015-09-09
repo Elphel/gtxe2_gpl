@@ -139,7 +139,16 @@ module gtxe2_chnl(
     output  wire            RXOUTCLKPCS,
     output  wire            RXOUTCLK,
     output  wire            RXOUTCLKFABRIC,
-    output  wire            rx_serial_clk
+    output  wire            rx_serial_clk,
+
+// additional ports to pll
+    output              TSTOUT,
+    input   [15:0]      GTRSVD,
+    input   [15:0]      PCSRSVDIN,
+    input   [4:0]       PCSRSVDIN2,
+    input   [4:0]       PMARSVDIN,
+    input   [4:0]       PMARSVDIN2,
+    input   [19:0]      TSTIN
 );
 parameter   [23:0]  CPLL_CFG        = 29'h00BC07DC;
 parameter   integer CPLL_FBDIV      = 4;
@@ -312,12 +321,22 @@ clocking(
     .TXOUTCLK           (TXOUTCLK),
     .TXOUTCLKFABRIC     (TXOUTCLKFABRIC),
     .tx_serial_clk      (tx_serial_clk),
+    .tx_piso_clk        (),
 
+    .GTRSVD             (GTRSVD),
+    .PCSRSVDIN          (PCSRSVDIN),
+    .PCSRSVDIN2         (PCSRSVDIN2),
+    .PMARSVDIN          (PMARSVDIN),
+    .PMARSVDIN2         (PMARSVDIN2),
+    .TSTIN              (TSTIN),
+    .TSTOUT             (TSTOUT),
+    
     .RXOUTCLKPMA        (RXOUTCLKPMA),
     .RXOUTCLKPCS        (RXOUTCLKPCS),
     .RXOUTCLK           (RXOUTCLK),
     .RXOUTCLKFABRIC     (RXOUTCLKFABRIC),
-    .rx_serial_clk      (rx_serial_clk)
+    .rx_serial_clk      (rx_serial_clk),
+    .rx_sipo_clk        ()
 );
 
 endmodule

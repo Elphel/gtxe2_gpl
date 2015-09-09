@@ -165,6 +165,7 @@ wire [internal_data_width - 1:0]    dataiface_data_out;
 wire [interface_data_width - 1:0]   dataiface_data_in;
 
 //assign  dataiface_data_in  = {TXCHARDISPMODE[interface_isk_width - 1:0], TXCHARDISPVAL[interface_isk_width - 1:0], TXDATA[iface_databus_width - 1:0]};
+genvar ii;
 localparam outdiv = interface_data_width / internal_data_width;
 generate
 for (ii = 1; ii < (outdiv + 1); ii = ii + 1)
@@ -201,7 +202,6 @@ dataiface
 wire    [internal_data_width - 1:0] polarized_data;
 
 // invert data (get words as [abdceifghj] after 8/10, each word shall be transmitter in a reverse bit order)
-genvar ii;
 genvar jj;
 generate
     for (ii = 0; ii < internal_data_width; ii = ii + 10)

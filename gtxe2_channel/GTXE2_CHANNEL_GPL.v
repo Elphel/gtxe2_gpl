@@ -49,12 +49,12 @@ module GTXE2_CHANNEL(
     output              CPLLLOCK,
     output              CPLLREFCLKLOST,
     output              TSTOUT,
-    input               GTRSVD,
-    input               PCSRSVDIN,
-    input               PCSRSVDIN2,
-    input               PMARSVDIN,
-    input               PMARSVDIN2,
-    input               TSTIN,
+    input   [15:0]      GTRSVD,
+    input   [15:0]      PCSRSVDIN,
+    input   [4:0]       PCSRSVDIN2,
+    input   [4:0]       PMARSVDIN,
+    input   [4:0]       PMARSVDIN2,
+    input   [19:0]      TSTIN,
 // Reset Mode ports, ug476 p.62
     input               GTRESETSEL,
     input               RESETOVRD,
@@ -130,11 +130,11 @@ module GTXE2_CHANNEL(
     output              TXPHALIGNDONE,
     output              TXPHINITDONE,
     output              TXDLYSRESETDONE,
-    input               TXSYNCMODE,
+/*    input               TXSYNCMODE,
     input               TXSYNCALLIN,
     input               TXSYNCIN,
     output              TXSYNCOUT,
-    output              TXSYNCDONE,
+    output              TXSYNCDONE,*/
 // TX Pattern Generator, ug476 p.147
     input   [2:0]       TXPRBSSEL,
     input               TXPRBSFORCEERR,
@@ -713,17 +713,27 @@ channel(
     .CPLLLOCK               (CPLLLOCK),
     .CPLLREFCLKLOST         (CPLLREFCLKLOST),
 
-    .TXOUTCLKPMA            (TXOUTCLKPMA),
+    .GTRSVD                 (GTRSVD),
+    .PCSRSVDIN              (PCSRSVDIN),
+    .PCSRSVDIN2             (PCSRSVDIN2),
+    .PMARSVDIN              (PMARSVDIN),
+    .PMARSVDIN2             (PMARSVDIN2),
+    .TSTIN                  (TSTIN),
+    .TSTOUT                 (TSTOUT),
+    
+    .TXOUTCLKPMA            (),
     .TXOUTCLKPCS            (TXOUTCLKPCS),
     .TXOUTCLK               (TXOUTCLK),
     .TXOUTCLKFABRIC         (TXOUTCLKFABRIC),
     .tx_serial_clk          (),
 
-    .RXOUTCLKPMA            (RXOUTCLKPMA),
+    .RXOUTCLKPMA            (),
     .RXOUTCLKPCS            (RXOUTCLKPCS),
     .RXOUTCLK               (RXOUTCLK),
     .RXOUTCLKFABRIC         (RXOUTCLKFABRIC),
-    .rx_serial_clk          ()
+    .rx_serial_clk          (),
+
+    .RXDLYBYPASS            (RXDLYBYPASS)
 );
 
 
